@@ -79,6 +79,13 @@ const messageModal = new bootstrap.Modal(document.getElementById('messageModal')
 const modalMessageContent = document.getElementById('modalMessageContent');
 const syncButtonSpinner = syncButton.querySelector('.spinner-border');
 
+// New elements for display
+const currentTimeDisplay = document.getElementById('currentTime');
+const currentMiladiDateDisplay = document.getElementById('currentMiladiDate');
+const currentHijriDateDisplay = document.getElementById('currentHijriDate');
+const selectedLocationDisplay = document.getElementById('selectedLocationDisplay');
+
+
 let db; // IndexedDB instance
 
 /**
@@ -316,59 +323,65 @@ function populateLocationSelect() {
 }
 
 /**
- * Displays prayer times in the table.
+ * Displays prayer times in the table, focusing only on today's data.
  * @param {string} locationCode - The JAKIM zone code.
  * @param {number} year - The year to display.
  */
 async function displayPrayerTimes(locationCode, year) {
-    prayerTimesTableBody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5">Loading prayer times...</td></tr>';
+    prayerTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Loading today\'s prayer times...</td></tr>';
     const data = await getPrayerTimesForYear(locationCode, year);
 
     if (!data || data.length === 0) {
-        prayerTimesTableBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-5">No prayer times found for this location and year. Please click 'Sync' to fetch.</td></tr>`;
+        prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No prayer times found for today for this location and year. Please click 'Sync' to fetch.</td></tr>`;
         return;
     }
 
-    prayerTimesTableBody.innerHTML = ''; // Clear existing rows
-
-    // Get the current day for highlighting
     const today = new Date();
     // Format for comparison "DD-Mon-YYYY" e.g., "15-Jun-2025"
     const todayFormatted = `${today.getDate().toString().padStart(2, '0')}-${today.toLocaleString('en-US', { month: 'short' })}-${today.getFullYear()}`;
 
-    data.forEach(dayData => {
+    const todayPrayerData = data.find(dayData => dayData.date === todayFormatted);
+
+    prayerTimesTableBody.innerHTML = ''; // Clear existing rows
+
+    if (todayPrayerData) {
         const row = document.createElement('tr');
-        // Parse date for display
-        const dateParts = dayData.date.split('-'); // e.g., "01-Jan-2024"
-        const dateObj = new Date(`${dateParts[1]} ${dateParts[0]}, ${dateParts[2]}`);
-        const displayDate = dateObj.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
-
-        const isToday = dayData.date === todayFormatted; // Compare with the exact string format from API
-        if (isToday) {
-            row.classList.add('table-primary'); // Highlight current day
-        }
-
+        // No date, hijri, day columns as per new layout
         row.innerHTML = `
-            <td>${displayDate}</td>
-            <td>${dayData.hijri}</td>
-            <td>${dayData.day}</td>
-            <td>${dayData.imsak}</td>
-            <td>${dayData.fajr}</td>
-            <td>${dayData.syuruk}</td>
-            <td>${dayData.dhuhr}</td>
-            <td>${dayData.asr}</td>
-            <td>${dayData.maghrib}</td>
-            <td>${dayData.isha}</td>
-            <td>${dayData.dhuha || '--:--'}</td> <!-- Display Dhuha or placeholder -->
+            <td>${todayPrayerData.imsak}</td>
+            <td>${todayPrayerData.fajr}</td>
+            <td>${todayPrayerData.syuruk}</td>
+            <td>${todayPrayerData.dhuha || '--:--'}</td>
+            <td>${todayPrayerData.dhuhr}</td>
+            <td>${todayPrayerData.asr}</td>
+            <td>${todayPrayerData.maghrib}</td>
+            <td>${todayPrayerData.isha}</td>
         `;
         prayerTimesTableBody.appendChild(row);
 
-        // Scroll to today's date if highlighted
-        if (isToday) {
-            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-    });
+        // Update current dates and location display
+        const locationName = JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode;
+        selectedLocationDisplay.textContent = locationName;
+        currentMiladiDateDisplay.textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        currentHijriDateDisplay.textContent = todayPrayerData.hijri; // Use hijri from API response
+    } else {
+        prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Today's prayer times are not available for this location or year. Please sync or try again later.</td></tr>`;
+        currentHijriDateDisplay.textContent = ''; // Clear if not available
+    }
 }
+
+
+/**
+ * Updates the current time displayed on the page.
+ */
+function updateClock() {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const seconds = now.getSeconds().toString().padStart(2, '0');
+    currentTimeDisplay.textContent = `${hours}:${minutes}:${seconds}`;
+}
+
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
@@ -378,16 +391,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Populate locations dropdown
     populateLocationSelect();
 
-    // Set a default selected location if needed, otherwise it will pick the first one
-    // const defaultLocationCode = 'WLY01';
-    // if (locationSelect.querySelector(`option[value="${defaultLocationCode}"]`)) {
-    //     locationSelect.value = defaultLocationCode;
-    // }
-
     // Initial display based on default selected location and current year
     const initialLocationCode = locationSelect.value;
     const currentYear = new Date().getFullYear();
     displayPrayerTimes(initialLocationCode, currentYear);
+
+    // Update clock every second
+    setInterval(updateClock, 1000);
+    updateClock(); // Call immediately to avoid initial delay
 
     // Add change listener for location select
     locationSelect.addEventListener('change', (event) => {
