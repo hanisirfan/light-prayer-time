@@ -45,7 +45,7 @@ const JAKIM_ZONES = [
     { code: 'SBH01', name: 'Sabah: Bahagian Sandakan (Timur), Bukit Garam, Semawang, Temanggong, Tambisan, Bandar Sandakan' },
     { code: 'SBH02', name: 'Sabah: Beluran, Telupid, Pinangah, Terusan, Kuamut, Bahagian Sandakan (Barat)' },
     { code: 'SBH03', name: 'Sabah: Lahad Datu, Silabukan, Kunak, Sahabat, Semporna, Tungku, Bahagian Tawau (Timur)' },
-    { code: 'SBH04', name: 'Sabah: Bandar Tawau, Balong, Merotai, Kalabakan, Bahagian Tawau (Barat)' },
+    { code: 'SBH04', name: 'Sabah: Bandar Tawau, Balong, Merotai, Kalabakan, Bahagian Tawau (L/B)' }, // Adjusted name for brevity
     { code: 'SBH05', name: 'Sabah: Kudat, Kota Marudu, Pitas, Pulau Banggi, Bahagian Kudat' },
     { code: 'SBH06', name: 'Sabah: Gunung Kinabalu' },
     { code: 'SBH07', name: 'Sabah: Kota Kinabalu, Ranau, Kota Belud, Tuaran, Penampang, Papar, Putatan, Bahagian Pantai Barat' },
@@ -75,6 +75,7 @@ const JAKIM_ZONES = [
 const locationSelect = document.getElementById('locationSelect');
 const syncButton = document.getElementById('syncButton');
 const prayerTimesTableBody = document.getElementById('prayerTimesTableBody');
+const prayerTimesTable = document.getElementById('prayerTimesTable'); // Get the table element
 const messageModal = new bootstrap.Modal(document.getElementById('messageModal'));
 const modalMessageContent = document.getElementById('modalMessageContent');
 const syncButtonSpinner = syncButton.querySelector('.spinner-border');
@@ -84,9 +85,15 @@ const currentTimeDisplay = document.getElementById('currentTime');
 const currentMiladiDateDisplay = document.getElementById('currentMiladiDate');
 const currentHijriDateDisplay = document.getElementById('currentHijriDate');
 const selectedLocationDisplay = document.getElementById('selectedLocationDisplay');
-
+const nextPrayerNameDisplay = document.getElementById('nextPrayerName');
+const nextPrayerTimeDisplay = document.getElementById('nextPrayerTime');
+const countdownToNextPrayerDisplay = document.getElementById('countdownToNextPrayer');
+const darkModeSwitch = document.getElementById('darkModeSwitch');
+const body = document.body;
 
 let db; // IndexedDB instance
+let todayPrayerDataGlobal = null; // Store today's prayer data globally for clock updates
+let nextPrayerTimeout; // To clear previous countdown timeouts
 
 /**
  * Shows a Bootstrap modal with a given title and message.
@@ -107,11 +114,29 @@ function showLoading(isLoading) {
     if (isLoading) {
         syncButtonSpinner.classList.remove('d-none');
         syncButton.disabled = true;
-        syncButton.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Loading...`;
+        syncButton.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span> Syncing...`;
     } else {
         syncButtonSpinner.classList.add('d-none');
         syncButton.disabled = false;
-        syncButton.innerHTML = `Sync This Year's Prayer Times`;
+        syncButton.innerHTML = `Sync`;
+    }
+}
+
+/**
+ * Sets the theme (dark or light mode).
+ * @param {string} mode - 'dark' or 'light'.
+ */
+function setTheme(mode) {
+    if (mode === 'dark') {
+        body.classList.add('dark-mode');
+        prayerTimesTable.classList.add('table-dark'); // Add table-dark class
+        localStorage.setItem('theme', 'dark');
+        darkModeSwitch.checked = true;
+    } else {
+        body.classList.remove('dark-mode');
+        prayerTimesTable.classList.remove('table-dark'); // Remove table-dark class
+        localStorage.setItem('theme', 'light');
+        darkModeSwitch.checked = false;
     }
 }
 
@@ -213,18 +238,8 @@ async function fetchPrayerTimesForMonth(zone, year, month) {
         }
         const data = await response.json();
 
-        // --- START DEBUGGING LOG ---
-        console.group(`API Response for ${zone} - ${year}/${month}`);
-        console.log('API URL:', url);
-        console.log('Full API Response:', data);
-        // Corrected condition check for data.status
-        const conditionResult = data.status === 'OK!' && Array.isArray(data.prayerTime) && data.prayerTime.length > 0;
-        console.log('Condition (status === "OK!" && isArray && length > 0) result:', conditionResult);
-        console.groupEnd();
-        // --- END DEBUGGING LOG ---
-
         // Check if data.prayerTime exists and is an array, and if it has actual data
-        if (conditionResult) { // Use the pre-evaluated condition result
+        if (data.status === 'OK!' && Array.isArray(data.prayerTime) && data.prayerTime.length > 0) {
             console.log(`Successfully fetched prayer data for ${zone} - ${year}/${month}`);
             return data.prayerTime;
         } else {
@@ -233,7 +248,6 @@ async function fetchPrayerTimesForMonth(zone, year, month) {
         }
     } catch (error) {
         console.error(`Error fetching prayer times for ${zone} - ${year}/${month}:`, error);
-        // If there's an error, return an empty array to prevent breaking the overall sync
         return [];
     }
 }
@@ -261,7 +275,6 @@ async function fetchAndStoreAllPrayerTimes(locationCode) {
         console.log(`Cleared existing data for ${locationCode} (${currentYear}) from IndexedDB.`);
     } catch (error) {
         console.error('Error clearing old data from IndexedDB:', error);
-        // Not critical, can proceed
     }
 
     try {
@@ -277,7 +290,6 @@ async function fetchAndStoreAllPrayerTimes(locationCode) {
         if (allPrayerTimes.length > 0) {
             // Sort by date to ensure correct order
             allPrayerTimes.sort((a, b) => {
-                // Convert "DD-Mon-YYYY" to a comparable date format
                 const parseDate = (dateStr) => {
                     const parts = dateStr.split('-');
                     const monthMap = {
@@ -320,66 +332,210 @@ function populateLocationSelect() {
         option.textContent = zone.name;
         locationSelect.appendChild(option);
     });
+    // Set default selected location display
+    selectedLocationDisplay.textContent = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || 'Select Location...';
 }
 
 /**
  * Displays prayer times in the table, focusing only on today's data.
+ * Also updates current date, time, next prayer and countdown.
  * @param {string} locationCode - The JAKIM zone code.
  * @param {number} year - The year to display.
  */
 async function displayPrayerTimes(locationCode, year) {
     prayerTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Loading today\'s prayer times...</td></tr>';
+    
+    // Clear previous countdown if any
+    if (nextPrayerTimeout) {
+        clearTimeout(nextPrayerTimeout);
+    }
+
     const data = await getPrayerTimesForYear(locationCode, year);
 
+    // Update current location display regardless of data availability
+    selectedLocationDisplay.textContent = JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode;
+
     if (!data || data.length === 0) {
-        prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No prayer times found for today for this location and year. Please click 'Sync' to fetch.</td></tr>`;
+        prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">No prayer times found for today for this location and year. Please click 'Sync' in settings to fetch.</td></tr>`;
+        currentMiladiDateDisplay.textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        currentHijriDateDisplay.textContent = '---'; // No Hijri if no data
+        nextPrayerNameDisplay.textContent = 'N/A';
+        nextPrayerTimeDisplay.textContent = '---';
+        countdownToNextPrayerDisplay.textContent = '---';
+        todayPrayerDataGlobal = null;
         return;
     }
 
     const today = new Date();
-    // Format for comparison "DD-Mon-YYYY" e.g., "15-Jun-2025"
-    const todayFormatted = `${today.getDate().toString().padStart(2, '0')}-${today.toLocaleString('en-US', { month: 'short' })}-${today.getFullYear()}`;
+    // Use toISOString and slice to get "YYYY-MM-DD" for robust comparison
+    const todayFormattedForComparison = today.toISOString().slice(0, 10); 
+    
+    // Find today's data using a robust date comparison
+    const todayData = data.find(dayData => {
+        // Convert API date "DD-Mon-YYYY" to "YYYY-MM-DD" for comparison
+        const parts = dayData.date.split('-');
+        const monthMap = {
+            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+            'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+        };
+        const apiDateFormatted = `${parts[2]}-${monthMap[parts[1]]}-${parts[0]}`;
+        return apiDateFormatted === todayFormattedForComparison;
+    });
 
-    const todayPrayerData = data.find(dayData => dayData.date === todayFormatted);
+    todayPrayerDataGlobal = todayData; // Store for clock updates
 
     prayerTimesTableBody.innerHTML = ''; // Clear existing rows
 
-    if (todayPrayerData) {
+    if (todayData) {
         const row = document.createElement('tr');
-        // No date, hijri, day columns as per new layout
         row.innerHTML = `
-            <td>${todayPrayerData.imsak}</td>
-            <td>${todayPrayerData.fajr}</td>
-            <td>${todayPrayerData.syuruk}</td>
-            <td>${todayPrayerData.dhuha || '--:--'}</td>
-            <td>${todayPrayerData.dhuhr}</td>
-            <td>${todayPrayerData.asr}</td>
-            <td>${todayPrayerData.maghrib}</td>
-            <td>${todayPrayerData.isha}</td>
+            <td>${todayData.imsak}</td>
+            <td>${todayData.fajr}</td>
+            <td>${todayData.syuruk}</td>
+            <td>${todayData.dhuha || '--:--'}</td>
+            <td>${todayData.dhuhr}</td>
+            <td>${todayData.asr}</td>
+            <td>${todayData.maghrib}</td>
+            <td>${todayData.isha}</td>
         `;
         prayerTimesTableBody.appendChild(row);
 
-        // Update current dates and location display
-        const locationName = JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode;
-        selectedLocationDisplay.textContent = locationName;
+        // Update main display dates
         currentMiladiDateDisplay.textContent = today.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        currentHijriDateDisplay.textContent = todayPrayerData.hijri; // Use hijri from API response
+        currentHijriDateDisplay.textContent = todayData.hijri;
+
+        // Immediately update clock and prayer times after displaying data
+        updateClockAndPrayerStatus();
+
     } else {
         prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Today's prayer times are not available for this location or year. Please sync or try again later.</td></tr>`;
-        currentHijriDateDisplay.textContent = ''; // Clear if not available
+        currentHijriDateDisplay.textContent = '---';
+        nextPrayerNameDisplay.textContent = 'N/A';
+        nextPrayerTimeDisplay.textContent = '---';
+        countdownToNextPrayerDisplay.textContent = '---';
+        todayPrayerDataGlobal = null;
     }
 }
 
-
 /**
- * Updates the current time displayed on the page.
+ * Updates the current time, and determines/displays the next prayer time and its countdown.
  */
-function updateClock() {
+function updateClockAndPrayerStatus() {
     const now = new Date();
     const hours = now.getHours().toString().padStart(2, '0');
     const minutes = now.getMinutes().toString().padStart(2, '0');
     const seconds = now.getSeconds().toString().padStart(2, '0');
     currentTimeDisplay.textContent = `${hours}:${minutes}:${seconds}`;
+
+    if (!todayPrayerDataGlobal) {
+        nextPrayerNameDisplay.textContent = 'No Data';
+        nextPrayerTimeDisplay.textContent = '---';
+        countdownToNextPrayerDisplay.textContent = '---';
+        // Still schedule to update clock, but not prayer status until data is available
+        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000);
+        return;
+    }
+
+    const prayerTimesOrder = ['fajr', 'syuruk', 'dhuha', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const prayerNamesMap = {
+        'imsak': 'Imsak', 'fajr': 'Fajr', 'syuruk': 'Syuruk', 'dhuha': 'Dhuha',
+        'dhuhr': 'Dhuhr', 'asr': 'Asr', 'maghrib': 'Maghrib', 'isha': 'Isha'
+    };
+
+    let nextPrayerFound = false;
+    let nextPrayerName = '';
+    let nextPrayerTime = '';
+    let nextPrayerDateTime = null;
+
+    // Check today's prayers
+    for (const prayerKey of prayerTimesOrder) {
+        const timeStr = todayPrayerDataGlobal[prayerKey];
+        if (!timeStr || timeStr === '--:--') continue;
+
+        const [pHours, pMinutes] = timeStr.split(':').map(Number);
+        const prayerDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0);
+
+        if (prayerDateTime > now) {
+            nextPrayerName = prayerNamesMap[prayerKey];
+            nextPrayerTime = timeStr;
+            nextPrayerDateTime = prayerDateTime;
+            nextPrayerFound = true;
+            break;
+        }
+    }
+
+    // If no prayer found for today (all passed), check Fajr for tomorrow
+    if (!nextPrayerFound) {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        const tomorrowFormattedForComparison = tomorrow.toISOString().slice(0, 10);
+
+        getPrayerTimesForYear(locationSelect.value, tomorrow.getFullYear()).then(tomorrowDataAll => {
+            let tomorrowFajrData = null;
+            if (tomorrowDataAll && tomorrowDataAll.length > 0) {
+                 tomorrowFajrData = tomorrowDataAll.find(d => {
+                    const parts = d.date.split('-');
+                    const monthMap = {
+                        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+                        'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                    };
+                    const apiDateFormatted = `${parts[2]}-${monthMap[parts[1]]}-${parts[0]}`;
+                    return apiDateFormatted === tomorrowFormattedForComparison;
+                });
+            }
+
+            if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr !== '--:--') {
+                const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
+                nextPrayerName = 'Fajr (Tomorrow)';
+                nextPrayerTime = tomorrowFajrData.fajr;
+                nextPrayerDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
+                updateNextPrayerDisplay(nextPrayerName, nextPrayerTime, nextPrayerDateTime, now);
+            } else {
+                nextPrayerNameDisplay.textContent = 'No Next Prayer Data';
+                nextPrayerTimeDisplay.textContent = '---';
+                countdownToNextPrayerDisplay.textContent = '---';
+            }
+            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
+        }).catch(error => {
+            console.error("Error fetching tomorrow's data:", error);
+            nextPrayerNameDisplay.textContent = 'Error Loading Next Prayer';
+            nextPrayerTimeDisplay.textContent = '---';
+            countdownToNextPrayerDisplay.textContent = '---';
+            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
+        });
+    } else {
+        updateNextPrayerDisplay(nextPrayerName, nextPrayerTime, nextPrayerDateTime, now);
+        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
+    }
+}
+
+/**
+ * Updates the display for the next prayer time and countdown.
+ * @param {string} name
+ * @param {string} time
+ * @param {Date} dateTimeObj
+ * @param {Date} currentTimeObj
+ */
+function updateNextPrayerDisplay(name, time, dateTimeObj, currentTimeObj) {
+    nextPrayerNameDisplay.textContent = `Next Prayer: ${name}`;
+    nextPrayerTimeDisplay.textContent = time;
+
+    const diffMs = dateTimeObj.getTime() - currentTimeObj.getTime();
+    if (diffMs < 0) {
+        countdownToNextPrayerDisplay.textContent = 'Passed';
+        clearTimeout(nextPrayerTimeout);
+        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 100);
+    } else {
+        const totalSeconds = Math.floor(diffMs / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        countdownToNextPrayerDisplay.textContent =
+            `${hours.toString().padStart(2, '0')}:` +
+            `${minutes.toString().padStart(2, '0')}:` +
+            `${seconds.toString().padStart(2, '0')}`;
+    }
 }
 
 
@@ -388,28 +544,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Open IndexedDB first
     await openDatabase();
 
+    // Set initial theme (dark mode by default)
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        setTheme('light');
+    } else {
+        setTheme('dark'); // Default to dark mode or if 'dark' was saved
+    }
+
     // Populate locations dropdown
     populateLocationSelect();
 
     // Initial display based on default selected location and current year
     const initialLocationCode = locationSelect.value;
     const currentYear = new Date().getFullYear();
-    displayPrayerTimes(initialLocationCode, currentYear);
+    await displayPrayerTimes(initialLocationCode, currentYear);
 
-    // Update clock every second
-    setInterval(updateClock, 1000);
-    updateClock(); // Call immediately to avoid initial delay
+    // Theme switch listener
+    darkModeSwitch.addEventListener('change', (event) => {
+        if (event.target.checked) {
+            setTheme('dark');
+        } else {
+            setTheme('light');
+        }
+    });
 
-    // Add change listener for location select
-    locationSelect.addEventListener('change', (event) => {
+    // Add change listener for location select (inside Offcanvas)
+    locationSelect.addEventListener('change', async (event) => {
         const selectedLocation = event.target.value;
         const currentYear = new Date().getFullYear();
-        displayPrayerTimes(selectedLocation, currentYear);
+        await displayPrayerTimes(selectedLocation, currentYear);
     });
 
-    // Add click listener for sync button
-    syncButton.addEventListener('click', () => {
+    // Add click listener for sync button (inside Offcanvas)
+    syncButton.addEventListener('click', async () => {
         const selectedLocation = locationSelect.value;
-        fetchAndStoreAllPrayerTimes(selectedLocation);
+        await fetchAndStoreAllPrayerTimes(selectedLocation);
     });
+
+    // Start clock and prayer status updates
+    updateClockAndPrayerStatus();
 });

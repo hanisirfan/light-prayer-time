@@ -1,55 +1,192 @@
 /* css/main.css */
 
+:root {
+    /* Light Mode Variables */
+    --body-bg: #f0f2f5;
+    --card-bg: #ffffff;
+    --text-color: #212529;
+    --heading-color: #0d6efd; /* Bootstrap primary blue */
+    --muted-text-color: #6c757d;
+    --border-color: #dee2e6;
+    --table-header-bg: #0d6efd;
+    --table-header-color: white;
+    --table-stripe-bg: #f8f9fa; /* bg-light-subtle for table stripes */
+    --table-hover-bg: #e2f0ff;
+    --prayer-status-box-bg: #e9ecef; /* light gray */
+    --next-prayer-countdown-color: #198754; /* Bootstrap success green */
+    --offcanvas-heading-color: #212529; /* Dark text for light mode offcanvas headings */
+}
+
+body.dark-mode {
+    /* Dark Mode Variables */
+    --body-bg: #212529; /* Dark background */
+    --card-bg: #343a40; /* Slightly lighter dark for card */
+    --text-color: #e9ecef; /* Light text */
+    --heading-color: #6a92ff; /* Lighter blue for headings */
+    --muted-text-color: #ced4da;
+    --border-color: #495057;
+    --table-header-bg: #007bff; /* Darker blue for table header */
+    --table-header-color: white;
+    --table-stripe-bg: #495057; /* Darker stripe color */
+    --table-hover-bg: #6c757d; /* Darker hover color */
+    --prayer-status-box-bg: #495057;
+    --next-prayer-countdown-color: #28a745; /* Darker green */
+    --offcanvas-heading-color: #e9ecef; /* Light text for dark mode offcanvas headings */
+}
+
 body {
     font-family: 'Inter', sans-serif;
-    background-color: #f0f2f5;
+    background-color: var(--body-bg);
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1rem; /* Add some padding for smaller screens */
+    padding: 1rem;
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
-    max-width: 900px; /* Max width for content */
+    /* Increased max-width for a wider main card */
+    max-width: 960px; /* Increased from 900px */
 }
 
 .card {
     border-radius: 1rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
-    background-color: #ffffff;
-    width: 100%; /* Ensure card takes full width of its container */
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
+    background-color: var(--card-bg);
+    width: 100%;
+    min-height: 550px; /* Make the middle white box (card) bigger */
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Center content vertically */
+    align-items: center; /* Center content horizontally */
+    position: relative;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Ensure text colors correctly use variables */
+.card .text-primary {
+    color: var(--heading-color) !important;
+}
+
+.card .text-secondary {
+    color: var(--muted-text-color) !important;
+}
+
+.card .text-muted {
+    color: var(--muted-text-color) !important;
+}
+
+.card .text-success {
+    color: var(--next-prayer-countdown-color) !important;
 }
 
 .form-select, .btn {
     border-radius: 0.5rem;
 }
 
-/* Specific styling for the prayer times table - for a single row */
-/* The .table-responsive class from Bootstrap might be needed if the table columns overflow on very small screens,
-   but for 8 columns, it's less likely to be an issue on mobile. */
+.form-select {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border-color: var(--border-color);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.form-select option {
+    background-color: var(--card-bg); /* For dropdown options */
+    color: var(--text-color);
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--heading-color);
+    --bs-btn-border-color: var(--heading-color);
+    --bs-btn-hover-bg: #0a58ca;
+    --bs-btn-hover-border-color: #0a58ca;
+    --bs-btn-active-bg: #084298;
+    --bs-btn-active-border-color: #084298;
+    --bs-btn-disabled-bg: var(--heading-color);
+    --bs-btn-disabled-border-color: var(--heading-color);
+    transition: all 0.3s ease;
+}
+
+.offcanvas {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.offcanvas-header {
+    background-color: var(--table-header-bg) !important; /* Use table-header-bg for consistency */
+    color: var(--table-header-color) !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.offcanvas-body hr {
+    border-color: var(--border-color);
+}
+
+.form-check-label {
+    color: var(--text-color);
+}
+
+/* Apply color to the headings in the offcanvas body */
+.offcanvas-body .text-muted {
+    color: var(--offcanvas-heading-color) !important;
+    transition: color 0.3s ease;
+}
+
+
+/* Specific styling for the table container div */
+.card > .row > .col-12 > div.p-3.border.rounded-3 {
+    background-color: var(--prayer-status-box-bg) !important; /* Use the prayer status box bg for the table container */
+    border-color: var(--border-color) !important;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Specific styling for the prayer times table */
 .table {
-    width: 100%; /* Ensure table takes full width of its container */
-    table-layout: fixed; /* Ensures columns are of equal width, can be adjusted */
+    width: 100%;
+    table-layout: fixed;
+    border-color: var(--border-color);
+    transition: all 0.3s ease;
 }
 
 .table thead th {
-    background-color: #0d6efd; /* Bootstrap primary color */
-    color: white;
+    background-color: var(--table-header-bg) !important;
+    color: var(--table-header-color) !important;
     vertical-align: middle;
     padding: 0.75rem;
     font-size: 0.9rem;
-    border-bottom: 2px solid #0d6efd;
-    text-align: center; /* Center header text */
+    border-bottom: 2px solid var(--table-header-bg);
+    text-align: center;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .table tbody td {
     vertical-align: middle;
     padding: 0.75rem;
-    font-size: 1.1rem; /* Slightly larger for visibility */
+    font-size: 1.1rem;
     font-weight: 700;
-    text-align: center; /* Center cell text */
+    text-align: center;
+    border-top: 1px solid var(--border-color); /* Maintain consistent border */
+    transition: border-color 0.3s ease;
 }
+
+/* Override Bootstrap .table-striped and .table-dark .table-striped for consistency */
+body:not(.dark-mode) .table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: var(--table-stripe-bg);
+}
+
+body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
+  background-color: var(--table-stripe-bg) !important; /* Force dark stripe color */
+}
+
+
+.table-hover > tbody > tr:hover > * {
+    background-color: var(--table-hover-bg) !important;
+}
+
 
 .spinner-border-sm {
     width: 1rem;
@@ -60,43 +197,92 @@ body {
 /* Clock and Date styling */
 #currentTime {
     font-weight: bold;
-    color: #343a40; /* Darker text for clock */
-    font-size: 3rem; /* Larger clock font size */
+    color: var(--text-color);
+    font-size: 3.5rem;
+    transition: color 0.3s ease;
 }
 
 #currentMiladiDate, #currentHijriDate {
-    color: #6c757d; /* Muted text for dates */
+    color: var(--muted-text-color);
     font-size: 1.2rem;
+    transition: color 0.3s ease;
 }
 
 #selectedLocationDisplay {
     margin-top: 0.5rem;
     font-weight: bold;
-    color: #0d6efd; /* Primary color for location */
+    color: var(--heading-color);
     font-size: 1.5rem;
+    transition: color 0.3s ease;
 }
 
-/* Responsive adjustments for date/time display */
+.prayer-status-box {
+    background-color: var(--prayer-status-box-bg);
+    border: 1px solid var(--border-color);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+    width: 80%;
+    max-width: 350px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#nextPrayerName {
+    color: var(--text-color);
+    transition: color 0.3s ease;
+}
+
+#nextPrayerTime {
+    color: var(--muted-text-color);
+    transition: color 0.3s ease;
+}
+
+#countdownToNextPrayer {
+    color: var(--next-prayer-countdown-color);
+    transition: color 0.3s ease;
+}
+
+/* Responsive adjustments */
 @media (max-width: 768px) {
-    .d-flex.flex-wrap {
-        flex-direction: column;
-        align-items: center;
+    .d-flex.flex-md-row {
+        flex-direction: column !important;
     }
-    .d-flex.flex-wrap > * {
-        margin-bottom: 0.5rem !important;
+    .d-flex.flex-md-row > .d-none.d-md-block {
+        display: none !important;
     }
+    .d-flex.flex-md-row > * {
+        margin-bottom: 0.2rem !important;
+    }
+
     #currentTime {
-        font-size: 2.5rem; /* Adjust clock size for mobile */
+        font-size: 2.8rem;
     }
     #currentMiladiDate, #currentHijriDate {
         font-size: 1rem;
     }
+    #selectedLocationDisplay {
+        font-size: 1.2rem;
+    }
+    .prayer-status-box p {
+        font-size: 1rem !important;
+    }
+    .prayer-status-box #countdownToNextPrayer {
+        font-size: 1.8rem !important;
+    }
     .table tbody td {
-        font-size: 0.85rem; /* Adjust table font size for mobile */
-        padding: 0.5rem; /* Reduce padding on mobile */
+        font-size: 0.85rem;
+        padding: 0.5rem;
     }
     .table thead th {
         font-size: 0.8rem;
         padding: 0.5rem;
+    }
+    .card {
+        min-height: 480px;
+        padding: 1rem;
+    }
+    .card .position-absolute {
+        top: 0.5rem !important;
+        right: 0.5rem !important;
+        margin: 0 !important;
     }
 }
