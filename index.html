@@ -9,7 +9,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Prayer Times">
-    <!-- Updated to .png and image/png mime type, referencing the new logo path -->
     <link rel="apple-touch-icon" href="images/logo/logo-192x192.png">
     <link rel="icon" type="image/png" sizes="192x192" href="images/logo/logo-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="images/logo/logo-512x512.png">
@@ -64,30 +63,32 @@
                 <div class="col-12">
                     <h2 class="text-center mb-3 text-secondary">Today's Prayer Times</h2>
                     <div class="p-3 border rounded-3">
-                        <table class="table table-striped table-hover mb-0 text-center" id="prayerTimesTable">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Imsak</th>
-                                    <th scope="col">Fajr</th>
-                                    <th scope="col">Syuruk</th>
-                                    <th scope="col">Dhuha</th>
-                                    <th scope="col">Dhuhr</th>
-                                    <th scope="col">Asr</th>
-                                    <th scope="col">Maghrib</th>
-                                    <th scope="col">Isha</th>
-                                </tr>
-                            </thead>
-                            <tbody id="prayerTimesTableBody">
-                                <!-- Today's Prayer times will be displayed here -->
-                                <tr><td colspan="8" class="text-center text-muted py-4">Select a location and click 'Sync' in settings to load today's prayer times.</td></tr>
-                            </tbody>
-                            <tfoot id="iqamaTimesTableBody">
-                                <!-- Iqama times will be displayed here -->
-                                <tr class="table-info">
-                                    <td colspan="8" class="text-center">Loading Iqama times...</td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                        <div class="table-responsive"> <!-- NEW: This div makes the table scrollable -->
+                            <table class="table table-striped table-hover mb-0 text-center" id="prayerTimesTable">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Imsak</th>
+                                        <th scope="col">Fajr</th>
+                                        <th scope="col">Syuruk</th>
+                                        <th scope="col">Dhuha</th>
+                                        <th scope="col">Dhuhr</th>
+                                        <th scope="col">Asr</th>
+                                        <th scope="col">Maghrib</th>
+                                        <th scope="col">Isha</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="prayerTimesTableBody">
+                                    <!-- Today's Prayer times will be displayed here -->
+                                    <tr><td colspan="8" class="text-center text-muted py-4">Select a location and click 'Sync' in settings to load today's prayer times.</td></tr>
+                                </tbody>
+                                <tfoot id="iqamaTimesTableBody">
+                                    <!-- Iqama times will be displayed here -->
+                                    <tr class="table-info">
+                                        <td colspan="8" class="text-center">Loading Iqama times...</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div> <!-- End table-responsive -->
                     </div>
                 </div>
             </div>
