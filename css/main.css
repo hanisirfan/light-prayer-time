@@ -47,7 +47,6 @@ body {
 }
 
 .container {
-    /* Removed max-width to allow it to expand more, controlled by Bootstrap's container itself */
     width: 100%; /* Ensure it takes full width of its parent */
 }
 
@@ -96,6 +95,20 @@ body {
 .form-select option {
     background-color: var(--card-bg); /* For dropdown options */
     color: var(--text-color);
+}
+
+.form-control {
+    background-color: var(--card-bg);
+    color: var(--text-color);
+    border-color: var(--border-color);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+.form-control:focus {
+    background-color: var(--card-bg); /* Maintain background on focus */
+    color: var(--text-color);
+    border-color: var(--heading-color);
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); /* Bootstrap primary shadow */
 }
 
 .btn-primary {
@@ -163,28 +176,47 @@ body {
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-.table tbody td {
+/* Table body and footer cells */
+.table tbody td,
+.table tfoot td { /* Apply to tfoot td as well */
     vertical-align: middle;
     padding: 0.75rem;
     font-size: 1.1rem;
     font-weight: 700;
     text-align: center;
     border-top: 1px solid var(--border-color); /* Maintain consistent border */
-    transition: border-color 0.3s ease;
+    color: var(--text-color); /* Explicitly set text color for table cells */
+    transition: color 0.3s ease, border-color 0.3s ease;
 }
 
+
 /* Override Bootstrap .table-striped and .table-dark .table-striped for consistency */
-body:not(.dark-mode) .table-striped > tbody > tr:nth-of-type(odd) > * {
+/* Apply direct background colors to tbody rows, relying on .table-dark for overall theme */
+.table tbody tr:nth-of-type(odd) {
   background-color: var(--table-stripe-bg);
 }
 
-body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
-  background-color: var(--table-stripe-bg) !important; /* Force dark stripe color */
+.table tbody tr:nth-of-type(even) {
+    background-color: var(--card-bg); /* Use card background for even rows */
 }
 
 
 .table-hover > tbody > tr:hover > * {
     background-color: var(--table-hover-bg) !important;
+}
+
+/* Iqama row styling - Removed .table-info and made it consistent with tbody rows */
+.table tfoot tr {
+    /* Use same background logic as tbody rows */
+    background-color: var(--table-stripe-bg); /* Default to stripe background, it will be the only tfoot row */
+    font-weight: bold;
+    border-top: 2px solid var(--border-color);
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Override for dark mode on tfoot if table-dark is applied to table */
+.table.table-dark tfoot tr {
+    background-color: var(--table-stripe-bg) !important; /* Ensure dark stripe bg for tfoot in dark mode */
 }
 
 
@@ -279,7 +311,7 @@ body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
     .prayer-status-box #countdownToNextPrayer {
         font-size: 1.8rem !important;
     }
-    .table tbody td {
+    .table tbody td, .table tfoot td { /* Apply to tfoot td as well */
         font-size: 0.85rem;
         padding: 0.5rem;
     }
