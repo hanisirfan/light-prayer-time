@@ -114,6 +114,18 @@ let iqamaOffsets = {
 };
 
 /**
+ * Helper function to format time string from "HH:MM:SS" to "HH:MM".
+ * @param {string} timeStr - The time string with seconds.
+ * @returns {string} The time string without seconds.
+ */
+function formatTimeWithoutSeconds(timeStr) {
+    if (!timeStr || timeStr.trim() === '--:--') {
+        return '--:--';
+    }
+    return timeStr.substring(0, 5); // Take "HH:MM"
+}
+
+/**
  * Shows a Bootstrap modal with a given title and message.
  * @param {string} title - The title of the modal.
  * @param {string} message - The content message of the modal.
@@ -364,12 +376,14 @@ function populateLocationSelect() {
 }
 
 /**
- * Formats a Miladi date into "DD Mon YYYY" format.
+ * Formats a Miladi date into "DD Mon YYYY Miladi" format.
  * @param {Date} date - The Miladi date object.
  * @returns {string} Formatted date string.
  */
 function formatMiladiDate(date) {
-    return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    const options = { day: 'numeric', month: 'short', year: 'numeric' };
+    // Use 'en-GB' locale for DD Mon YYYY, then append 'Miladi'
+    return date.toLocaleDateString('en-GB', options) + ' Miladi';
 }
 
 /**
@@ -397,15 +411,15 @@ function formatHijriDate(hijriDateStr) {
 
 /**
  * Calculates Iqama time by adding offset minutes to a prayer time.
- * @param {string} prayerTimeStr - Prayer time in "HH:MM:SS" format.
+ * @param {string} prayerTimeStr - Prayer time in "HH:MM:SS" or "HH:MM" format.
  * @param {number} offsetMinutes - Minutes to add for Iqama.
  * @returns {string} Iqama time in "HH:MM" format.
  */
 function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
-    if (!prayerTimeStr || prayerTimeStr === '--:--' || offsetMinutes === undefined) {
+    if (!prayerTimeStr || prayerTimeStr.trim() === '--:--' || offsetMinutes === undefined) {
         return '--:--';
     }
-    const [hours, minutes] = prayerTimeStr.split(':').map(Number);
+    const [hours, minutes] = prayerTimeStr.substring(0,5).split(':').map(Number); // Ensure HH:MM format for parsing
     const date = new Date();
     date.setHours(hours, minutes, 0, 0); // Set to prayer time
     date.setMinutes(date.getMinutes() + offsetMinutes); // Add offset
@@ -423,7 +437,7 @@ function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
  */
 async function displayPrayerTimes(locationCode, year) {
     prayerTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Loading today\'s prayer times...</td></tr>';
-    iqamaTimesTableBody.innerHTML = '<tr class="table-info"><td colspan="8" class="text-center">Loading Iqama times...</td></tr>';
+    iqamaTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center">Loading Iqama times...</td></tr>';
     
     // Clear previous countdown if any
     if (nextPrayerTimeout) {
@@ -458,23 +472,22 @@ async function displayPrayerTimes(locationCode, year) {
 
 
     if (todayData) {
-        // Display Prayer Times
+        // Display Prayer Times - remove seconds
         const prayerRow = document.createElement('tr');
         prayerRow.innerHTML = `
-            <td>${todayData.imsak}</td>
-            <td>${todayData.fajr}</td>
-            <td>${todayData.syuruk}</td>
-            <td>${todayData.dhuha || '--:--'}</td>
-            <td>${todayData.dhuhr}</td>
-            <td>${todayData.asr}</td>
-            <td>${todayData.maghrib}</td>
-            <td>${todayData.isha}</td>
+            <td>${formatTimeWithoutSeconds(todayData.imsak)}</td>
+            <td>${formatTimeWithoutSeconds(todayData.fajr)}</td>
+            <td>${formatTimeWithoutSeconds(todayData.syuruk)}</td>
+            <td>${formatTimeWithoutSeconds(todayData.dhuha || '--:--')}</td>
+            <td>${formatTimeWithoutSeconds(todayData.dhuhr)}</td>
+            <td>${formatTimeWithoutSeconds(todayData.asr)}</td>
+            <td>${formatTimeWithoutSeconds(todayData.maghrib)}</td>
+            <td>${formatTimeWithoutSeconds(todayData.isha)}</td>
         `;
         prayerTimesTableBody.appendChild(prayerRow);
 
         // Display Iqama Times
         const iqamaRow = document.createElement('tr');
-        iqamaRow.classList.add('table-info'); // Apply a distinct style for Iqama row
         iqamaRow.innerHTML = `
             <td>Iqama</td>
             <td>${calculateIqamaTime(todayData.fajr, iqamaOffsets.fajr)}</td>
@@ -497,7 +510,7 @@ async function displayPrayerTimes(locationCode, year) {
 
     } else {
         prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Today's prayer times are not available for this location or year. Please sync or try again later.</td></tr>`;
-        iqamaTimesTableBody.innerHTML = '<tr class="table-info"><td colspan="8" class="text-center">Iqama times not available.</td></tr>';
+        iqamaTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Iqama times not available.</td></tr>';
         currentMiladiDateDisplay.textContent = formatMiladiDate(today);
         currentHijriDateDisplay.textContent = '---';
         nextPrayerNameDisplay.textContent = 'N/A';
@@ -515,7 +528,7 @@ function updateClockAndPrayerStatus() {
     const hours = now.getHours().toString().padStart(2, '0');
     const minutes = now.getMinutes().toString().padStart(2, '0');
     const seconds = now.getSeconds().toString().padStart(2, '0');
-    currentTimeDisplay.textContent = `${hours}:${minutes}:${seconds}`;
+    currentTimeDisplay.textContent = `${hours}:${minutes}:${seconds}`; // Keep seconds for current time
 
     if (!todayPrayerDataGlobal) {
         nextPrayerNameDisplay.textContent = 'No Data';
@@ -525,36 +538,37 @@ function updateClockAndPrayerStatus() {
         return;
     }
 
-    // Include Iqama times for countdown calculation
-    const prayerTimesWithIqama = [];
-    const prayerKeys = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    // Define prayer keys and names for both standard prayers and Iqama
+    const standardPrayerKeys = ['imsak', 'fajr', 'syuruk', 'dhuha', 'dhuhr', 'asr', 'maghrib', 'isha'];
+    const mainPrayerKeysForIqama = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']; // Only these have Iqama
     const prayerNamesMap = {
         'imsak': 'Imsak', 'fajr': 'Fajr', 'syuruk': 'Syuruk', 'dhuha': 'Dhuha',
         'dhuhr': 'Dhuhr', 'asr': 'Asr', 'maghrib': 'Maghrib', 'isha': 'Isha'
     };
 
-    // First, add all direct prayer times (including imsak, syuruk, dhuha)
-    const allPrayerKeys = ['imsak', 'fajr', 'syuruk', 'dhuha', 'dhuhr', 'asr', 'maghrib', 'isha'];
-    for (const key of allPrayerKeys) {
+    let allEventsForToday = [];
+
+    // Add standard prayer times
+    for (const key of standardPrayerKeys) {
         const timeStr = todayPrayerDataGlobal[key];
-        if (timeStr && timeStr !== '--:--') {
+        if (timeStr && timeStr.trim() !== '--:--') {
             const [pHours, pMinutes] = timeStr.split(':').map(Number);
-            prayerTimesWithIqama.push({
+            allEventsForToday.push({
                 name: prayerNamesMap[key],
-                timeStr: timeStr,
+                timeStr: formatTimeWithoutSeconds(timeStr), // Format to HH:MM
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0)
             });
         }
     }
 
-    // Then, add Iqama times for the main prayers
-    for (const key of prayerKeys) {
+    // Add Iqama times for main prayers
+    for (const key of mainPrayerKeysForIqama) {
         const prayerTimeStr = todayPrayerDataGlobal[key];
         const offset = iqamaOffsets[key];
-        if (prayerTimeStr && prayerTimeStr !== '--:--' && offset !== undefined) {
-            const iqamaTimeStr = calculateIqamaTime(prayerTimeStr, offset);
+        if (prayerTimeStr && prayerTimeStr.trim() !== '--:--' && offset !== undefined) {
+            const iqamaTimeStr = calculateIqamaTime(prayerTimeStr, offset); // This already returns HH:MM
             const [iHours, iMinutes] = iqamaTimeStr.split(':').map(Number);
-            prayerTimesWithIqama.push({
+            allEventsForToday.push({
                 name: `Iqama ${prayerNamesMap[key]}`, // Name for Iqama
                 timeStr: iqamaTimeStr,
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), iHours, iMinutes, 0)
@@ -562,16 +576,16 @@ function updateClockAndPrayerStatus() {
         }
     }
 
-    // Sort all times chronologically
-    prayerTimesWithIqama.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
+    // Sort all events chronologically
+    allEventsForToday.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 
     let nextEventFound = false;
     let nextEventName = '';
     let nextEventTime = '';
     let nextEventDateTime = null;
 
-    // Find the next upcoming event (prayer or iqama)
-    for (const event of prayerTimesWithIqama) {
+    // Find the next upcoming event (prayer or iqama) from today's events
+    for (const event of allEventsForToday) {
         if (event.dateTime > now) {
             nextEventName = event.name;
             nextEventTime = event.timeStr;
@@ -581,7 +595,7 @@ function updateClockAndPrayerStatus() {
         }
     }
 
-    // If no event found for today, check Fajr for tomorrow
+    // If no event found for today (all passed), check Fajr for tomorrow
     if (!nextEventFound) {
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
@@ -601,11 +615,11 @@ function updateClockAndPrayerStatus() {
                 });
             }
 
-            if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr !== '--:--') {
+            if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr.trim() !== '--:--') {
                 const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
-                nextEventName = 'Fajr (Tomorrow)'; // Updated from nextPrayerName
-                nextEventTime = tomorrowFajrData.fajr; // Updated from nextPrayerTime
-                nextEventDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0); // Updated from nextPrayerDateTime
+                nextEventName = 'Fajr (Tomorrow)';
+                nextEventTime = formatTimeWithoutSeconds(tomorrowFajrData.fajr); // Format to HH:MM
+                nextEventDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
                 updateNextPrayerDisplay(nextEventName, nextEventTime, nextEventDateTime, now);
             } else {
                 nextPrayerNameDisplay.textContent = 'No Next Prayer Data';
@@ -634,8 +648,8 @@ function updateClockAndPrayerStatus() {
  * @param {Date} currentTimeObj
  */
 function updateNextPrayerDisplay(name, time, dateTimeObj, currentTimeObj) {
-    nextPrayerNameDisplay.textContent = `Next: ${name}`; // Shortened "Next Prayer:" to "Next:"
-    nextPrayerTimeDisplay.textContent = time;
+    nextPrayerNameDisplay.textContent = `Next: ${name}`;
+    nextPrayerTimeDisplay.textContent = time; // This 'time' is already HH:MM
 
     const diffMs = dateTimeObj.getTime() - currentTimeObj.getTime();
     if (diffMs < 0) {
@@ -679,7 +693,18 @@ function saveIqamaOffsets() {
     const settingsToSave = {
         iqamaOffsets: iqamaOffsets
     };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
+    // Merge with existing settings in localStorage to prevent overwriting other keys if any
+    const existingSettings = localStorage.getItem(SETTINGS_KEY);
+    let combinedSettings = {};
+    if (existingSettings) {
+        try {
+            combinedSettings = JSON.parse(existingSettings);
+        } catch (e) {
+            console.warn("Could not parse existing settings from localStorage, starting fresh.", e);
+        }
+    }
+    Object.assign(combinedSettings, settingsToSave); // Merge new iqama offsets
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(combinedSettings));
 }
 
 /**
@@ -708,7 +733,7 @@ function handleIqamaInputChange(event) {
         // Re-display prayer times to update Iqama row and next prayer countdown
         displayPrayerTimes(locationSelect.value, new Date().getFullYear());
     } else {
-        // Optionally revert to last valid or show error
+        // Revert to last valid value or show error
         input.value = iqamaOffsets[prayerKey];
         showMessage('Invalid Input', 'Please enter a number between 0 and 60 for Iqama offset.');
     }
@@ -719,7 +744,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Open IndexedDB first
     await openDatabase();
 
-    // Load saved settings (theme and iqama offsets)
+    // Set initial theme (dark mode by default or from saved)
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'light') {
         setTheme('light');

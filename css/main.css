@@ -11,6 +11,7 @@
     --table-header-bg: #0d6efd;
     --table-header-color: white;
     --table-stripe-bg: #f8f9fa; /* bg-light-subtle for table stripes */
+    --table-even-row-bg: #ffffff; /* Explicitly define even row bg for light mode */
     --table-hover-bg: #e2f0ff;
     --prayer-status-box-bg: #e9ecef; /* light gray */
     --next-prayer-countdown-color: #198754; /* Bootstrap success green */
@@ -28,6 +29,7 @@ body.dark-mode {
     --table-header-bg: #007bff; /* Darker blue for table header */
     --table-header-color: white;
     --table-stripe-bg: #495057; /* Darker stripe color */
+    --table-even-row-bg: #343a40; /* Explicitly define even row bg for dark mode */
     --table-hover-bg: #6c757d; /* Darker hover color */
     --prayer-status-box-bg: #495057;
     --next-prayer-countdown-color: #28a745; /* Darker green */
@@ -48,6 +50,7 @@ body {
 
 .container {
     width: 100%; /* Ensure it takes full width of its parent */
+    /* Removed max-width here */
 }
 
 .card {
@@ -197,26 +200,20 @@ body {
 }
 
 .table tbody tr:nth-of-type(even) {
-    background-color: var(--card-bg); /* Use card background for even rows */
+    background-color: var(--table-even-row-bg); /* Use new variable for even rows */
+}
+
+/* Ensure Iqama row matches the even row styling to avoid stripe conflict */
+.table tfoot tr {
+    background-color: var(--table-even-row-bg) !important; /* Make Iqama row match even rows */
+    font-weight: bold; /* Keep bold text */
+    border-top: 2px solid var(--border-color); /* Keep thicker border top */
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 
 .table-hover > tbody > tr:hover > * {
     background-color: var(--table-hover-bg) !important;
-}
-
-/* Iqama row styling - Removed .table-info and made it consistent with tbody rows */
-.table tfoot tr {
-    /* Use same background logic as tbody rows */
-    background-color: var(--table-stripe-bg); /* Default to stripe background, it will be the only tfoot row */
-    font-weight: bold;
-    border-top: 2px solid var(--border-color);
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-/* Override for dark mode on tfoot if table-dark is applied to table */
-.table.table-dark tfoot tr {
-    background-color: var(--table-stripe-bg) !important; /* Ensure dark stripe bg for tfoot in dark mode */
 }
 
 
@@ -245,14 +242,7 @@ body {
     font-weight: bold;
     color: var(--heading-color);
     font-size: 1.5rem;
-    /* Added for text wrapping */
-    text-wrap: balance;
-    overflow-wrap: break-word; /* Fallback for older browsers */
-    word-break: break-word;   /* Fallback for older browsers */
-    white-space: normal;      /* Ensure text wraps */
-    max-width: 90%; /* Prevent it from expanding indefinitely on very wide screens if balance doesn't work */
-    margin-left: auto;
-    margin-right: auto;
+    /* Removed text-wrap, overflow-wrap, word-break, white-space, max-width, margin-left, margin-right for default Bootstrap handling */
     transition: color 0.3s ease;
 }
 
@@ -260,9 +250,8 @@ body {
     background-color: var(--prayer-status-box-bg);
     border: 1px solid var(--border-color);
     transition: background-color 0.3s ease, border-color 0.3s ease;
-    width: 80%;
-    max-width: 350px;
-    margin-left: auto;
+    /* Removed width and max-width to allow content to dictate size naturally */
+    margin-left: auto; /* Re-add auto margins if needed for centering if width is not 100% */
     margin-right: auto;
 }
 
@@ -301,8 +290,8 @@ body {
     }
     #selectedLocationDisplay {
         font-size: 1.2rem;
-        /* Adjust for mobile to ensure it wraps correctly */
-        max-width: 100%;
+        /* Adjusted for mobile to ensure it wraps correctly */
+        max-width: 100%; /* Ensure it uses full width on mobile */
         padding: 0 10px; /* Add some horizontal padding */
     }
     .prayer-status-box p {
