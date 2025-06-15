@@ -47,8 +47,8 @@ body {
 }
 
 .container {
-    /* Increased max-width for a wider main card */
-    max-width: 960px; /* Increased from 900px */
+    /* Removed max-width to allow it to expand more, controlled by Bootstrap's container itself */
+    width: 100%; /* Ensure it takes full width of its parent */
 }
 
 .card {
@@ -213,6 +213,14 @@ body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
     font-weight: bold;
     color: var(--heading-color);
     font-size: 1.5rem;
+    /* Added for text wrapping */
+    text-wrap: balance;
+    overflow-wrap: break-word; /* Fallback for older browsers */
+    word-break: break-word;   /* Fallback for older browsers */
+    white-space: normal;      /* Ensure text wraps */
+    max-width: 90%; /* Prevent it from expanding indefinitely on very wide screens if balance doesn't work */
+    margin-left: auto;
+    margin-right: auto;
     transition: color 0.3s ease;
 }
 
@@ -261,6 +269,9 @@ body.dark-mode .table-striped > tbody > tr:nth-of-type(odd) > * {
     }
     #selectedLocationDisplay {
         font-size: 1.2rem;
+        /* Adjust for mobile to ensure it wraps correctly */
+        max-width: 100%;
+        padding: 0 10px; /* Add some horizontal padding */
     }
     .prayer-status-box p {
         font-size: 1rem !important;
