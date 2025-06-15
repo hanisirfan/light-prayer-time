@@ -50,7 +50,6 @@ body {
 
 .container {
     width: 100%; /* Ensure it takes full width of its parent */
-    /* Removed max-width here */
 }
 
 .card {
@@ -163,7 +162,7 @@ body {
 /* Specific styling for the prayer times table */
 .table {
     width: 100%;
-    table-layout: fixed;
+    table-layout: fixed; /* Keep fixed layout for consistent column widths */
     border-color: var(--border-color);
     transition: all 0.3s ease;
 }
@@ -181,7 +180,7 @@ body {
 
 /* Table body and footer cells */
 .table tbody td,
-.table tfoot td { /* Apply to tfoot td as well */
+.table tfoot td {
     vertical-align: middle;
     padding: 0.75rem;
     font-size: 1.1rem;
@@ -302,9 +301,16 @@ body {
         padding: 0.5rem;
     }
     .table thead th {
-        font-size: 0.8rem;
-        padding: 0.5rem;
+        font-size: 0.7rem; /* Reduced font size for table headers on mobile */
+        padding: 0.4rem; /* Adjusted padding for table headers on mobile */
+        white-space: nowrap; /* Prevent wrapping of header text to ensure min-width works */
     }
+
+    /* Force a minimum width on the table itself when in table-responsive container on small screens */
+    .table-responsive > .table {
+        min-width: 650px; /* Adjust this value as needed to ensure scrolling. Typical phone width is 320-420px. */
+    }
+
     .card {
         min-height: 480px;
         padding: 1rem;
