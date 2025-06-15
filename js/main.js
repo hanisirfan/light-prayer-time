@@ -82,7 +82,7 @@ const messageModal = new bootstrap.Modal(document.getElementById('messageModal')
 const modalMessageContent = document.getElementById('modalMessageContent');
 const syncButtonSpinner = syncButton.querySelector('.spinner-border');
 
-// New elements for display
+// Main display elements
 const currentTimeDisplay = document.getElementById('currentTime');
 const currentMiladiDateDisplay = document.getElementById('currentMiladiDate');
 const currentHijriDateDisplay = document.getElementById('currentHijriDate');
@@ -91,6 +91,7 @@ const nextPrayerNameDisplay = document.getElementById('nextPrayerName');
 const nextPrayerTimeDisplay = document.getElementById('nextPrayerTime');
 const countdownToNextPrayerDisplay = document.getElementById('countdownToNextPrayer');
 const darkModeSwitch = document.getElementById('darkModeSwitch');
+const timeFormatSwitch = document.getElementById('timeFormatSwitch'); // NEW: Time format switch
 const body = document.body;
 
 // Iqama input fields
@@ -113,16 +114,33 @@ let iqamaOffsets = {
     isha: 10
 };
 
+// Default time format (false = 12-hour, true = 24-hour)
+let use24HourFormat = true; // Default to 24-hour as requested by implicit removal of seconds
+
 /**
- * Helper function to format time string from "HH:MM:SS" to "HH:MM".
- * @param {string} timeStr - The time string with seconds.
- * @returns {string} The time string without seconds.
+ * Helper function to format a time string (HH:MM:SS or HH:MM) to the user's preferred format.
+ * @param {string} timeStr - The time string from API (e.g., "05:48:00").
+ * @param {boolean} includeSeconds - Whether to include seconds (only for current time).
+ * @returns {string} Formatted time string (e.g., "05:48" or "05:48:00 AM/PM").
  */
-function formatTimeWithoutSeconds(timeStr) {
+function formatTime(timeStr, includeSeconds = false) {
     if (!timeStr || timeStr.trim() === '--:--') {
-        return '--:--';
+        return includeSeconds ? '--:--:--' : '--:--';
     }
-    return timeStr.substring(0, 5); // Take "HH:MM"
+    const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, seconds || 0, 0); // Use 0 for seconds if not present
+
+    const options = {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: !use24HourFormat // Set hour12 based on user preference
+    };
+    if (includeSeconds) {
+        options.second = '2-digit';
+    }
+
+    return date.toLocaleTimeString([], options);
 }
 
 /**
@@ -382,7 +400,6 @@ function populateLocationSelect() {
  */
 function formatMiladiDate(date) {
     const options = { day: 'numeric', month: 'short', year: 'numeric' };
-    // Use 'en-GB' locale for DD Mon YYYY, then append 'Miladi'
     return date.toLocaleDateString('en-GB', options) + ' Miladi';
 }
 
@@ -413,20 +430,20 @@ function formatHijriDate(hijriDateStr) {
  * Calculates Iqama time by adding offset minutes to a prayer time.
  * @param {string} prayerTimeStr - Prayer time in "HH:MM:SS" or "HH:MM" format.
  * @param {number} offsetMinutes - Minutes to add for Iqama.
- * @returns {string} Iqama time in "HH:MM" format.
+ * @returns {string} Iqama time formatted using formatTime function.
  */
 function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
     if (!prayerTimeStr || prayerTimeStr.trim() === '--:--' || offsetMinutes === undefined) {
         return '--:--';
     }
-    const [hours, minutes] = prayerTimeStr.substring(0,5).split(':').map(Number); // Ensure HH:MM format for parsing
+    // Parse the HH:MM part and convert to a Date object
+    const [hours, minutes] = prayerTimeStr.substring(0,5).split(':').map(Number);
     const date = new Date();
-    date.setHours(hours, minutes, 0, 0); // Set to prayer time
+    date.setHours(hours, minutes, 0, 0); // Set to prayer time, seconds to 0
     date.setMinutes(date.getMinutes() + offsetMinutes); // Add offset
 
-    const iqamaHours = date.getHours().toString().padStart(2, '0');
-    const iqamaMinutes = date.getMinutes().toString().padStart(2, '0');
-    return `${iqamaHours}:${iqamaMinutes}`;
+    // Format the resulting time using the global formatTime function
+    return formatTime(`${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:00`);
 }
 
 /**
@@ -472,21 +489,21 @@ async function displayPrayerTimes(locationCode, year) {
 
 
     if (todayData) {
-        // Display Prayer Times - remove seconds
+        // Display Prayer Times - use formatTime without seconds
         const prayerRow = document.createElement('tr');
         prayerRow.innerHTML = `
-            <td>${formatTimeWithoutSeconds(todayData.imsak)}</td>
-            <td>${formatTimeWithoutSeconds(todayData.fajr)}</td>
-            <td>${formatTimeWithoutSeconds(todayData.syuruk)}</td>
-            <td>${formatTimeWithoutSeconds(todayData.dhuha || '--:--')}</td>
-            <td>${formatTimeWithoutSeconds(todayData.dhuhr)}</td>
-            <td>${formatTimeWithoutSeconds(todayData.asr)}</td>
-            <td>${formatTimeWithoutSeconds(todayData.maghrib)}</td>
-            <td>${formatTimeWithoutSeconds(todayData.isha)}</td>
+            <td>${formatTime(todayData.imsak)}</td>
+            <td>${formatTime(todayData.fajr)}</td>
+            <td>${formatTime(todayData.syuruk)}</td>
+            <td>${formatTime(todayData.dhuha || '--:--')}</td>
+            <td>${formatTime(todayData.dhuhr)}</td>
+            <td>${formatTime(todayData.asr)}</td>
+            <td>${formatTime(todayData.maghrib)}</td>
+            <td>${formatTime(todayData.isha)}</td>
         `;
         prayerTimesTableBody.appendChild(prayerRow);
 
-        // Display Iqama Times
+        // Display Iqama Times - calculate and format
         const iqamaRow = document.createElement('tr');
         iqamaRow.innerHTML = `
             <td>Iqama</td>
@@ -525,10 +542,8 @@ async function displayPrayerTimes(locationCode, year) {
  */
 function updateClockAndPrayerStatus() {
     const now = new Date();
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const seconds = now.getSeconds().toString().padStart(2, '0');
-    currentTimeDisplay.textContent = `${hours}:${minutes}:${seconds}`; // Keep seconds for current time
+    // Current time display always includes seconds
+    currentTimeDisplay.textContent = formatTime(`${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`, true);
 
     if (!todayPrayerDataGlobal) {
         nextPrayerNameDisplay.textContent = 'No Data';
@@ -555,7 +570,7 @@ function updateClockAndPrayerStatus() {
             const [pHours, pMinutes] = timeStr.split(':').map(Number);
             allEventsForToday.push({
                 name: prayerNamesMap[key],
-                timeStr: formatTimeWithoutSeconds(timeStr), // Format to HH:MM
+                timeStr: formatTime(timeStr), // Format to user's preference (HH:MM)
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0)
             });
         }
@@ -566,11 +581,11 @@ function updateClockAndPrayerStatus() {
         const prayerTimeStr = todayPrayerDataGlobal[key];
         const offset = iqamaOffsets[key];
         if (prayerTimeStr && prayerTimeStr.trim() !== '--:--' && offset !== undefined) {
-            const iqamaTimeStr = calculateIqamaTime(prayerTimeStr, offset); // This already returns HH:MM
-            const [iHours, iMinutes] = iqamaTimeStr.split(':').map(Number);
+            const iqamaTimeStrRaw = calculateIqamaTime(prayerTimeStr, offset); // This returns HH:MM string from previous logic
+            const [iHours, iMinutes] = iqamaTimeStrRaw.split(':').map(Number);
             allEventsForToday.push({
                 name: `Iqama ${prayerNamesMap[key]}`, // Name for Iqama
-                timeStr: iqamaTimeStr,
+                timeStr: formatTime(iqamaTimeStrRaw), // Format to user's preference (HH:MM)
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), iHours, iMinutes, 0)
             });
         }
@@ -618,7 +633,7 @@ function updateClockAndPrayerStatus() {
             if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr.trim() !== '--:--') {
                 const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
                 nextEventName = 'Fajr (Tomorrow)';
-                nextEventTime = formatTimeWithoutSeconds(tomorrowFajrData.fajr); // Format to HH:MM
+                nextEventTime = formatTime(tomorrowFajrData.fajr); // Format to user's preference (HH:MM)
                 nextEventDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
                 updateNextPrayerDisplay(nextEventName, nextEventTime, nextEventDateTime, now);
             } else {
@@ -649,7 +664,7 @@ function updateClockAndPrayerStatus() {
  */
 function updateNextPrayerDisplay(name, time, dateTimeObj, currentTimeObj) {
     nextPrayerNameDisplay.textContent = `Next: ${name}`;
-    nextPrayerTimeDisplay.textContent = time; // This 'time' is already HH:MM
+    nextPrayerTimeDisplay.textContent = time; // This 'time' is already formatted HH:MM
 
     const diffMs = dateTimeObj.getTime() - currentTimeObj.getTime();
     if (diffMs < 0) {
@@ -670,9 +685,9 @@ function updateNextPrayerDisplay(name, time, dateTimeObj, currentTimeObj) {
 }
 
 /**
- * Loads Iqama offsets from localStorage.
+ * Loads settings (Iqama offsets, time format) from localStorage.
  */
-function loadIqamaOffsets() {
+function loadSettings() {
     const savedSettings = localStorage.getItem(SETTINGS_KEY);
     if (savedSettings) {
         try {
@@ -680,31 +695,27 @@ function loadIqamaOffsets() {
             if (parsedSettings.iqamaOffsets) {
                 iqamaOffsets = { ...iqamaOffsets, ...parsedSettings.iqamaOffsets };
             }
+            // Load time format preference, default to true (24H) if not set
+            use24HourFormat = parsedSettings.use24HourFormat !== undefined ? parsedSettings.use24HourFormat : true;
+            timeFormatSwitch.checked = use24HourFormat; // Update the UI switch
         } catch (e) {
             console.error("Error parsing saved settings from localStorage", e);
         }
+    } else {
+        // If no settings saved, ensure switch matches the default
+        timeFormatSwitch.checked = use24HourFormat;
     }
 }
 
 /**
- * Saves Iqama offsets to localStorage.
+ * Saves settings (Iqama offsets, time format) to localStorage.
  */
-function saveIqamaOffsets() {
+function saveSettings() {
     const settingsToSave = {
-        iqamaOffsets: iqamaOffsets
+        iqamaOffsets: iqamaOffsets,
+        use24HourFormat: use24HourFormat
     };
-    // Merge with existing settings in localStorage to prevent overwriting other keys if any
-    const existingSettings = localStorage.getItem(SETTINGS_KEY);
-    let combinedSettings = {};
-    if (existingSettings) {
-        try {
-            combinedSettings = JSON.parse(existingSettings);
-        } catch (e) {
-            console.warn("Could not parse existing settings from localStorage, starting fresh.", e);
-        }
-    }
-    Object.assign(combinedSettings, settingsToSave); // Merge new iqama offsets
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(combinedSettings));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
 }
 
 /**
@@ -729,7 +740,7 @@ function handleIqamaInputChange(event) {
 
     if (!isNaN(value) && value >= 0 && value <= 60) {
         iqamaOffsets[prayerKey] = value;
-        saveIqamaOffsets();
+        saveSettings(); // Save all settings
         // Re-display prayer times to update Iqama row and next prayer countdown
         displayPrayerTimes(locationSelect.value, new Date().getFullYear());
     } else {
@@ -744,15 +755,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Open IndexedDB first
     await openDatabase();
 
-    // Set initial theme (dark mode by default or from saved)
+    // Load all saved settings (theme, time format, iqama offsets)
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'light') {
         setTheme('light');
     } else {
         setTheme('dark'); // Default to dark mode or if 'dark' was saved
     }
-
-    loadIqamaOffsets(); // Load Iqama offsets after theme
+    loadSettings(); // This will load iqamaOffsets and use24HourFormat
 
     // Populate locations dropdown and set last selected
     populateLocationSelect();
@@ -763,7 +773,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial display based on loaded location and current year
     const initialLocationCode = locationSelect.value;
     const currentYear = new Date().getFullYear();
-    await displayPrayerTimes(initialLocationCode, currentYear);
+    await displayPrayerTimes(initialLocationCode, currentYear); // This call will use the loaded time format
 
     // Theme switch listener
     darkModeSwitch.addEventListener('change', (event) => {
@@ -772,6 +782,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else {
             setTheme('light');
         }
+    });
+
+    // NEW: Time format switch listener
+    timeFormatSwitch.addEventListener('change', (event) => {
+        use24HourFormat = event.target.checked;
+        saveSettings(); // Save all settings
+        // Re-display prayer times to update all time formats
+        displayPrayerTimes(locationSelect.value, new Date().getFullYear());
+        updateClockAndPrayerStatus(); // Ensure current time updates immediately
     });
 
     // Add change listener for location select (inside Offcanvas)
@@ -795,6 +814,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     iqamaMaghribInput.addEventListener('input', handleIqamaInputChange);
     iqamaIshaInput.addEventListener('input', handleIqamaInputChange);
 
-    // Start clock and prayer status updates
+    // Start clock and prayer status updates (this will also trigger the initial countdown display)
     updateClockAndPrayerStatus();
 });
