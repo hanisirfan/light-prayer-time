@@ -5,7 +5,7 @@ const DB_NAME = 'PrayerTimesDB';
 const DB_VERSION = 4; // Incremented DB version for new syncHistoryStore schema and settings
 const STORE_NAME = 'prayerTimesStore'; // Stores data for each location + year
 const SYNC_HISTORY_STORE_NAME = 'syncHistoryStore'; // Store for sync records
-const SETTINGS_STORE_NAME = 'appSettingsStore'; // Store for general app settings
+const SETTINGS_STORE_STORE_NAME = 'appSettingsStore'; // Store for general app settings
 
 // JAKIM API Base URL
 // Note: The API is undocumented and its behavior might change.
@@ -326,14 +326,14 @@ function openDatabase() {
             // Ensure any new indexes for sorting are added here if needed, but not required for current sorting
             
             // Create object store for app settings
-            if (!db.objectStoreNames.contains(SETTINGS_STORE_NAME)) {
-                db.createObjectStore(SETTINGS_STORE_NAME, { keyPath: 'name' });
+            if (!db.objectStoreNames.contains(SETTINGS_STORE_STORE_NAME)) {
+                db.createObjectStore(SETTINGS_STORE_STORE_NAME, { keyPath: 'name' });
                 console.log('IndexedDB upgrade: appSettingsStore created.');
 
                 // --- Migration Logic from localStorage to IndexedDB (One-time on upgrade) ---
                 console.log("Attempting migration from localStorage to IndexedDB...");
                 const transaction = event.target.transaction; // Use transaction from upgradeneeded event
-                const settingsStore = transaction.objectStore(SETTINGS_STORE_NAME);
+                const settingsStore = transaction.objectStore(SETTINGS_STORE_STORE_NAME);
 
                 // Migrate existing settings object from localStorage
                 const oldSettingsString = localStorage.getItem('prayerTimeSettings');
@@ -405,8 +405,8 @@ function openDatabase() {
  */
 async function saveSetting(name, value) {
     try {
-        const transaction = db.transaction([SETTINGS_STORE_NAME], 'readwrite');
-        const store = transaction.objectStore(SETTINGS_STORE_NAME);
+        const transaction = db.transaction([SETTINGS_STORE_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(SETTINGS_STORE_STORE_NAME);
         await new Promise((resolve, reject) => {
             const request = store.put({ name: name, value: value });
             request.onsuccess = () => resolve();
@@ -425,8 +425,8 @@ async function saveSetting(name, value) {
  */
 async function loadSetting(name) {
     try {
-        const transaction = db.transaction([SETTINGS_STORE_NAME], 'readonly');
-        const store = transaction.objectStore(SETTINGS_STORE_NAME);
+        const transaction = db.transaction([SETTINGS_STORE_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(SETTINGS_STORE_STORE_NAME);
         const data = await new Promise((resolve, reject) => {
             const request = store.get(name);
             request.onsuccess = () => resolve(request.result ? request.result.value : undefined);
@@ -554,7 +554,7 @@ async function displaySyncHistory() {
                 if (a.status === 'Failed' && b.status === 'Successful') return -1;
                 if (a.status === 'Successful' && b.status === 'Failed') return 1;
                 // For same status, sort by latest time
-                return new Date(b.syncTime).getTime() - new Date(a.syncTime).getTime();
+                return new Date(b.syncTime).getTime() - new Date(b.syncTime).getTime();
             });
         }
 
@@ -735,7 +735,7 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
                 message += `<br> <span class="text-warning">Warning: Could not fetch data for month(s): ${failedMonths.join(', ')}. The API might not have data for these months yet.</span>`;
             }
             showMessage('Sync Complete', message);
-            displayPrayerTimes(locationCode, currentYear); // Re-display after sync
+            // Don't call displayPrayerTimes here; it's handled by the main DOMContentLoaded flow or manual sync.
         } else {
             fetchStatus = "Failed"; // No data at all
             apiResultForHistory = "Could not fetch any prayer times for the selected location and year. The API might not have data available for the current year yet, or there was an issue with the fetch. Please try again later.";
@@ -775,7 +775,13 @@ async function populateLocationSelect() {
     if (savedLocation && JAKIM_ZONES.some(zone => zone.code === savedLocation)) {
         locationSelect.value = savedLocation;
     } else {
-        locationSelect.value = JAKIM_ZONES[0].code; // Default to the first zone
+        // Set 'WLY01' as default if no saved location or invalid saved location
+        const defaultZone = 'WLY01';
+        if (JAKIM_ZONES.some(zone => zone.code === defaultZone)) {
+            locationSelect.value = defaultZone;
+        } else {
+            locationSelect.value = JAKIM_ZONES[0].code; // Fallback to the very first zone
+        }
     }
 
     // Set initial selected location display
@@ -839,7 +845,8 @@ function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
 /**
  * Displays prayer times in the table, focusing only on today's data.
  * Also updates current date, time, next prayer and countdown.
- * @param {string} locationCode - The JAKIM zone code.
+ * Handles fallback to other synced zones if data for selected zone is missing.
+ * @param {string} locationCode - The JAKIM zone code (initially requested).
  * @param {number} year - The year to display.
  */
 async function displayPrayerTimes(locationCode, year) {
@@ -855,13 +862,9 @@ async function displayPrayerTimes(locationCode, year) {
         clearInterval(iqamaCountdownInterval);
     }
 
-    const data = await getPrayerTimesForYear(locationCode, year);
-
-    // Update current location display regardless of data availability
-    selectedLocationDisplay.textContent = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || locationCode;
-
     const today = new Date();
     const todayFormattedForComparison = today.toISOString().slice(0, 10); //YYYY-MM-DD
+    const originalZoneName = JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode;
 
     // Reset announced prayers for a new day
     if (announcedPrayersToday.date !== todayFormattedForComparison) {
@@ -874,7 +877,6 @@ async function displayPrayerTimes(locationCode, year) {
             isha: false
         };
         // Reset lastAutoSync if it's a new day and auto sync is off (to re-trigger if needed)
-        // This makes sure if auto sync was off, and is then turned on, it tries to sync for the new day
         if (!autoSyncSettings.enabled && autoSyncSettings.lastAutoSync) {
             const lastSyncDate = new Date(autoSyncSettings.lastAutoSync).toISOString().slice(0,10);
             if (lastSyncDate !== todayFormattedForComparison) {
@@ -886,20 +888,60 @@ async function displayPrayerTimes(locationCode, year) {
 
 
     let todayData = null;
-    if (data && data.length > 0) {
-        todayData = data.find(dayData => {
-            const parts = dayData.date.split('-'); // e.g., "01-Jan-2025"
-            const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
-            const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`; // Convert to Drapeau-MM-DD
+    let usedZoneCode = locationCode;
+    let usedZoneName = originalZoneName;
+    let fallbackUsed = false;
+
+    // 1. Try to get data for the selected zone
+    let dataForSelectedZone = await getPrayerTimesForYear(locationCode, year);
+    if (dataForSelectedZone && dataForSelectedZone.length > 0) {
+        todayData = dataForSelectedZone.find(dayData => {
+            const parts = dayData.date.split('-');
+            const monthNum = API_MONTH_MAP[parts[1]];
+            const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
             return apiDateFormatted === todayFormattedForComparison;
         });
+    }
+
+    // 2. If data for selected zone is missing, try to find a fallback zone
+    if (!todayData) {
+        console.warn(`Prayer data missing for selected zone (${locationCode}). Searching for fallback...`);
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        
+        // Iterate over all available prayer time data in IndexedDB
+        const allStoredPrayerTimes = await new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        // Find a fallback from *any* stored zone data
+        for (const storedData of allStoredPrayerTimes) {
+            // Check if the stored data is for the current year
+            if (storedData.id.endsWith(`_${year}`)) {
+                const foundDailyData = storedData.data.find(dayData => {
+                    const parts = dayData.date.split('-');
+                    const monthNum = API_MONTH_MAP[parts[1]];
+                    const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
+                    return apiDateFormatted === todayFormattedForComparison;
+                });
+
+                if (foundDailyData) {
+                    todayData = foundDailyData;
+                    usedZoneCode = storedData.id.split('_')[0]; // Extract zone code from ID
+                    usedZoneName = JAKIM_ZONES.find(z => z.code === usedZoneCode)?.name || usedZoneCode;
+                    fallbackUsed = true;
+                    break; // Found a fallback, stop searching
+                }
+            }
+        }
     }
 
     todayPrayerDataGlobal = todayData; // Store for clock updates
 
     prayerTimesTableBody.innerHTML = ''; // Clear existing rows
     iqamaTimesTableBody.innerHTML = ''; // Clear existing iqama rows
-
 
     if (todayData) {
         // Display Prayer Times - use formatTime without seconds
@@ -934,21 +976,39 @@ async function displayPrayerTimes(locationCode, year) {
         // Update main display dates
         currentMiladiDateDisplay.textContent = formatMiladiDate(today);
         currentHijriDateDisplay.textContent = formatHijriDate(todayData.hijri);
+        // Update selected location display with the *actually used* zone name
+        selectedLocationDisplay.textContent = usedZoneName;
+
+        // Show fallback message if applicable
+        if (fallbackUsed) {
+            showMessage(
+                'Prayer Times Missing',
+                `Prayer time for <strong>${originalZoneName}</strong> is not available. Using prayer time from <strong>${usedZoneName}</strong>. Please try to sync manually again later.`
+            );
+        }
 
         // Immediately update clock and prayer times after displaying data
         updateClockAndPrayerStatus();
 
     } else {
-        prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Today's prayer times are not available for this location or year. Please sync or try again later.</td></tr>`;
+        // No data found for selected zone and no fallback available
+        prayerTimesTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">Today's prayer times are not available. Please sync or try again later.</td></tr>`;
         iqamaTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Iqama times not available.</td></tr>';
         currentMiladiDateDisplay.textContent = formatMiladiDate(today);
         currentHijriDateDisplay.textContent = '---';
         nextPrayerNameDisplay.textContent = 'N/A';
         nextPrayerTimeDisplay.textContent = '---';
         countdownToNextPrayerDisplay.textContent = '---';
+        selectedLocationDisplay.textContent = originalZoneName; // Still show originally selected zone
         todayPrayerDataGlobal = null;
         currentDisplayState = 'main'; // Ensure we are on main display if no data
         showDisplay('main');
+
+        // This modal is only for when NO data at all could be found (initial state or persistent sync issues)
+        // If there was a fallback, the message above covers it.
+        if (!fallbackUsed) {
+            showMessage('Data Unavailable', 'Cannot display prayer times. Please ensure you have synced data for your selected zone, or try to synchronize manually.');
+        }
     }
 }
 
@@ -1404,7 +1464,7 @@ function handleIqamaInputChange(event) {
     const prayerKey = input.dataset.prayer;
     const value = parseInt(input.value, 10);
 
-    if (!isNaN(value) && value >= 0 && value <= 60) { // Corrected the redundant '>='
+    if (!isNaN(value) && value >= 0 && value <= 60) {
         iqamaOffsets[prayerKey] = value;
         saveAllSettings(); // Save all settings
         // Re-display prayer times to update Iqama row and next prayer countdown
@@ -1709,10 +1769,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Populate Iqama input fields with loaded/default offsets
     populateIqamaInputs();
 
-    // Initial display based on loaded location and current year
     const initialLocationCode = locationSelect.value;
     const currentYear = new Date().getFullYear();
-    await displayPrayerTimes(initialLocationCode, currentYear); // This call will use the loaded time format
+    
+    // Check if prayer data exists for the initial/default zone
+    const existingData = await getPrayerTimesForYear(initialLocationCode, currentYear);
+    const todayFormattedForComparison = new Date().toISOString().slice(0, 10);
+    const todayDataExists = existingData && existingData.find(dayData => {
+        const parts = dayData.date.split('-');
+        const monthNum = API_MONTH_MAP[parts[1]];
+        const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
+        return apiDateFormatted === todayFormattedForComparison;
+    });
+
+    if (!todayDataExists) {
+        console.log(`No prayer data for ${initialLocationCode} (${currentYear}) found. Attempting initial sync.`);
+        // Proactively sync data if missing on first load
+        try {
+            await fetchAndStoreAllPrayerTimes(initialLocationCode, 'AUTO_INITIAL'); // Using new sync method 'AUTO_INITIAL'
+        } catch (error) {
+            console.error("Initial sync failed:", error);
+            // fetchAndStoreAllPrayerTimes already shows a message on failure.
+            // displayPrayerTimes will also handle showing the "Data Unavailable" modal if still no data.
+        }
+    }
+
+    // Always attempt to display prayer times after initial setup/sync attempt
+    await displayPrayerTimes(initialLocationCode, currentYear);
 
     // Check and run auto sync after initial display (NEW)
     checkAndRunAutoSync();
@@ -1744,6 +1827,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     syncButton.addEventListener('click', async () => {
         const selectedLocation = locationSelect.value;
         await fetchAndStoreAllPrayerTimes(selectedLocation, 'MANUAL'); // Pass 'MANUAL' sync method
+        await displayPrayerTimes(selectedLocation, new Date().getFullYear()); // Re-display after manual sync
     });
 
     // Add input listeners for Iqama offset fields
