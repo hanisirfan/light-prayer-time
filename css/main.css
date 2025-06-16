@@ -2,8 +2,9 @@
 
 :root {
     /* Light Mode Variables */
-    --body-bg: #f0f2f5;
-    --card-bg: #ffffff;
+    --body-bg: #f0f2f5; /* Overall background */
+    --display-section-bg: #ffffff; /* Background for the top display section */
+    --table-section-bg: #ffffff; /* Background for the bottom table section */
     --text-color: #212529;
     --heading-color: #0d6efd; /* Bootstrap primary blue */
     --muted-text-color: #6c757d;
@@ -13,15 +14,17 @@
     --table-stripe-bg: #f8f9fa; /* bg-light-subtle for table stripes */
     --table-even-row-bg: #ffffff; /* Explicitly define even row bg for light mode */
     --table-hover-bg: #e2f0ff;
-    --prayer-status-box-bg: #e9ecef; /* light gray */
+    --prayer-status-box-bg: #e9ecef; /* light gray for next prayer box */
     --next-prayer-countdown-color: #198754; /* Bootstrap success green */
+    --offcanvas-bg: #ffffff; /* Offcanvas background */
     --offcanvas-heading-color: #212529; /* Dark text for light mode offcanvas headings */
 }
 
 body.dark-mode {
     /* Dark Mode Variables */
-    --body-bg: #212529; /* Dark background */
-    --card-bg: #343a40; /* Slightly lighter dark for card */
+    --body-bg: #212529; /* Dark overall background */
+    --display-section-bg: #343a40; /* Darker background for top display section */
+    --table-section-bg: #343a40; /* Darker background for bottom table section */
     --text-color: #e9ecef; /* Light text */
     --heading-color: #6a92ff; /* Lighter blue for headings */
     --muted-text-color: #ced4da;
@@ -33,81 +36,127 @@ body.dark-mode {
     --table-hover-bg: #6c757d; /* Darker hover color */
     --prayer-status-box-bg: #495057;
     --next-prayer-countdown-color: #28a745; /* Darker green */
+    --offcanvas-bg: #343a40; /* Offcanvas background in dark mode */
     --offcanvas-heading-color: #e9ecef; /* Light text for dark mode offcanvas headings */
 }
 
 body {
     font-family: 'Inter', sans-serif;
     background-color: var(--body-bg);
-    min-height: 100vh;
+    min-height: 100vh; /* Ensure body covers full viewport height */
+    display: flex; /* Use flexbox for vertical layout of sections */
+    flex-direction: column; /* Stack sections vertically */
+    justify-content: flex-start; /* Align sections to top */
+    align-items: stretch; /* Stretch items to fill width */
+    padding: 0; /* Remove body padding to allow full width sections */
+    margin: 0; /* Remove default body margin */
+    color: var(--text-color);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    overflow-x: hidden; /* Prevent horizontal scrollbar on body from layout issues */
+}
+
+/* Settings button fixed positioning */
+.settings-button {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1050; /* Above modals/offcanvas */
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1rem;
-    color: var(--text-color);
-    transition: background-color 0.3s ease, color 0.3s ease;
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.2); /* Keep a subtle shadow */
+    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.container {
-    width: 100%; /* Ensure it takes full width of its parent */
-}
 
-.card {
-    border-radius: 1rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
-    background-color: var(--card-bg);
+/* New Display Section styling */
+.display-section {
     width: 100%;
-    min-height: 550px; /* Make the middle white box (card) bigger */
-    display: flex;
+    padding: 2rem 1rem; /* Keep internal padding for content spacing */
+    background-color: var(--display-section-bg);
+    transition: background-color 0.3s ease;
+    display: flex; /* Use flex for content alignment */
     flex-direction: column;
-    justify-content: center; /* Center content vertically */
-    align-items: center; /* Center content horizontally */
-    position: relative;
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    justify-content: center; /* Center content vertically within the section */
+    align-items: center; /* Center content horizontally within the section */
+    min-height: 70vh; /* Adjusted minimum height to 70% of viewport height */
+    flex-grow: 1; /* Allow to grow more if content demands it, but min-height is dominant */
 }
 
-/* Ensure text colors correctly use variables */
-.card .text-primary {
+/* New Prayer Table Section styling */
+.prayer-table-section {
+    width: 100%;
+    padding-top: 1rem; /* Add minimal top padding to separate from display section content */
+    padding-bottom: 1rem; /* Add minimal bottom padding */
+    padding-left: 0; /* Remove horizontal padding */
+    padding-right: 0; /* Remove horizontal padding */
+    background-color: var(--table-section-bg);
+    border-top: 1px solid var(--border-color); /* Separator line between sections */
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+    display: flex; /* Use flex for layout */
+    flex-direction: column;
+    justify-content: flex-start; /* Align table to top of section */
+    align-items: stretch; /* Stretch table container to full width */
+    flex-grow: 1; /* Allow this section to take remaining vertical space */
+    /* No min-height here, it will naturally take what's left after display-section */
+}
+
+/* Table container styling - now just for the p-3 border */
+.table-container { /* Renamed for clarity, removed rounded-3 */
+    background-color: var(--prayer-status-box-bg) !important; /* Use the prayer status box bg */
+    border: 1px solid var(--border-color) !important; /* Keep border */
+    border-radius: 0; /* Remove rounded corners */
+    padding: 1rem; /* Internal padding for table */
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+    width: 100%; /* Ensure it always takes full width of its parent */
+}
+
+
+/* Ensure text colors correctly use variables in general */
+.text-primary {
     color: var(--heading-color) !important;
 }
 
-.card .text-secondary {
+.text-secondary {
     color: var(--muted-text-color) !important;
 }
 
-.card .text-muted {
+.text-muted {
     color: var(--muted-text-color) !important;
 }
 
-.card .text-success {
+.text-success {
     color: var(--next-prayer-countdown-color) !important;
 }
 
 .form-select, .btn {
-    border-radius: 0.5rem;
+    border-radius: 0.5rem; /* Keep rounded buttons/selects */
 }
 
 .form-select {
-    background-color: var(--card-bg);
+    background-color: var(--offcanvas-bg); /* Use offcanvas bg for consistent styling */
     color: var(--text-color);
     border-color: var(--border-color);
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 .form-select option {
-    background-color: var(--card-bg); /* For dropdown options */
+    background-color: var(--offcanvas-bg); /* For dropdown options */
     color: var(--text-color);
 }
 
 .form-control {
-    background-color: var(--card-bg);
+    background-color: var(--offcanvas-bg); /* Consistent with select */
     color: var(--text-color);
     border-color: var(--border-color);
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 .form-control:focus {
-    background-color: var(--card-bg); /* Maintain background on focus */
+    background-color: var(--offcanvas-bg); /* Maintain background on focus */
     color: var(--text-color);
     border-color: var(--heading-color);
     box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); /* Bootstrap primary shadow */
@@ -126,13 +175,13 @@ body {
 }
 
 .offcanvas {
-    background-color: var(--card-bg);
+    background-color: var(--offcanvas-bg); /* Use new variable for offcanvas */
     color: var(--text-color);
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .offcanvas-header {
-    background-color: var(--table-header-bg) !important; /* Use table-header-bg for consistency */
+    background-color: var(--table-header-bg) !important;
     color: var(--table-header-color) !important;
     border-bottom: 1px solid var(--border-color);
 }
@@ -152,19 +201,13 @@ body {
 }
 
 
-/* Specific styling for the table container div */
-.card > .row > .col-12 > div.p-3.border.rounded-3 {
-    background-color: var(--prayer-status-box-bg) !important; /* Use the prayer status box bg for the table container */
-    border-color: var(--border-color) !important;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
 /* Specific styling for the prayer times table */
 .table {
     width: 100%;
     table-layout: fixed; /* Keep fixed layout for consistent column widths */
-    border-color: var(--border-color);
+    border-color: var(--border-color); /* Table borders */
     transition: all 0.3s ease;
+    border-collapse: collapse; /* Ensure borders collapse nicely */
 }
 
 .table thead th {
@@ -176,6 +219,10 @@ body {
     border-bottom: 2px solid var(--table-header-bg);
     text-align: center;
     transition: background-color 0.3s ease, color 0.3s ease;
+    border-right: 1px solid rgba(255, 255, 255, 0.1); /* Slight separator for headers */
+}
+.table thead th:last-child {
+    border-right: none; /* No border on last header */
 }
 
 /* Table body and footer cells */
@@ -187,8 +234,13 @@ body {
     font-weight: 700;
     text-align: center;
     border-top: 1px solid var(--border-color); /* Maintain consistent border */
+    border-right: 1px solid var(--border-color); /* Vertical cell separator */
     color: var(--text-color); /* Explicitly set text color for table cells */
     transition: color 0.3s ease, border-color 0.3s ease;
+}
+.table tbody td:last-child,
+.table tfoot td:last-child {
+    border-right: none; /* No border on last column */
 }
 
 
@@ -237,7 +289,7 @@ body {
 }
 
 #selectedLocationDisplay {
-    margin-top: 0.5rem;
+    margin-top: 0.5rem; /* Keep some margin below location display */
     font-weight: bold;
     color: var(--heading-color);
     font-size: 1.5rem;
@@ -248,8 +300,12 @@ body {
     background-color: var(--prayer-status-box-bg);
     border: 1px solid var(--border-color);
     transition: background-color 0.3s ease, border-color 0.3s ease;
-    margin-left: auto;
-    margin-right: auto;
+    max-width: 350px; /* Keep a max-width for this central box */
+    width: 80%; /* Add width for better responsiveness on larger screens */
+    margin-top: 1rem; /* Added padding to separate from elements above */
+    margin-bottom: 1rem; /* Added padding to separate from elements below */
+    padding: 1rem; /* Internal padding for its content */
+    border-radius: 0.5rem; /* Keep slight rounding for this internal box */
 }
 
 #nextPrayerName {
@@ -310,14 +366,38 @@ body {
     .table-responsive > .table {
         min-width: 650px; /* Adjust this value as needed to ensure scrolling. Typical phone width is 320-420px. */
     }
+    
+    /* Ensure full width for sections on small screens and remove external padding */
+    .display-section, .prayer-table-section {
+        padding-left: 0;
+        padding-right: 0;
+    }
+    /* Specific padding for content within display section on mobile */
+    .display-section {
+        padding-top: 1rem; /* Adjust top padding for mobile */
+        padding-bottom: 1rem; /* Adjust bottom padding for mobile */
+    }
+    .prayer-table-section {
+        padding-top: 0.5rem; /* Reduce top padding for prayer table section on mobile */
+        padding-bottom: 0.5rem; /* Reduce bottom padding for prayer table section on mobile */
+    }
+    .table-container {
+        padding: 0.5rem; /* Reduce inner padding for table container on mobile */
+    }
 
-    .card {
-        min-height: 480px;
-        padding: 1rem;
-    }
-    .card .position-absolute {
-        top: 0.5rem !important;
-        right: 0.5rem !important;
-        margin: 0 !important;
-    }
+}
+
+/* Keep these modal stylings, they apply to all modals */
+.modal-content {
+    background-color: var(--offcanvas-bg); /* Use offcanvas bg for modals */
+    color: var(--text-color);
+    border-radius: 0.75rem; /* Keep slight rounding for modals */
+}
+.modal-header {
+    background-color: var(--table-header-bg) !important;
+    color: var(--table-header-color) !important;
+    border-bottom: 1px solid var(--border-color) !important;
+}
+.modal-footer {
+    border-top: 1px solid var(--border-color) !important;
 }

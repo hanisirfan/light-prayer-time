@@ -30,67 +30,61 @@
     <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-    <div class="container my-5">
-        <div class="card p-4 p-md-5 position-relative">
-            <!-- Settings Button (Hamburger/Gear Icon) -->
-            <button class="btn btn-primary position-absolute top-0 end-0 m-3 d-flex align-items-center justify-content-center" type="button" data-bs-toggle="offcanvas" data-bs-target="#settingsOffcanvas" aria-controls="settingsOffcanvas" style="width: 45px; height: 45px; border-radius: 50%;">
-                <i class="bi bi-gear-fill fs-5"></i>
-            </button>
+    <!-- Settings Button (Fixed at top-right of viewport) -->
+    <button class="btn btn-primary settings-button" type="button" data-bs-toggle="offcanvas" data-bs-target="#settingsOffcanvas" aria-controls="settingsOffcanvas">
+        <i class="bi bi-gear-fill fs-5"></i>
+    </button>
 
-            <!-- Main Display Area -->
-            <div class="text-center mb-4 mt-4 pt-3">
-                <!-- Miladi Date | Hijri Date -->
-                <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-2 mb-2">
-                    <p class="h5 mb-0 text-muted" id="currentMiladiDate">Loading Miladi Date...</p>
-                    <span class="d-none d-md-block text-muted">|</span> <!-- Separator for desktop -->
-                    <p class="h5 mb-0 text-muted" id="currentHijriDate">Loading Hijri Date...</p>
-                </div>
-                <!-- Current Time -->
-                <p class="display-5 fw-bold mb-3" id="currentTime">--:--:--</p>
-                <!-- Location Selected -->
-                <p class="h4 text-primary mb-3" id="selectedLocationDisplay">Loading Location...</p>
+    <!-- Display Section (Top full-width section) -->
+    <div class="display-section text-center">
+        <!-- Miladi Date | Hijri Date -->
+        <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-2 mb-2">
+            <p class="h5 mb-0 text-muted" id="currentMiladiDate">Loading Miladi Date...</p>
+            <span class="d-none d-md-block text-muted">|</span> <!-- Separator for desktop -->
+            <p class="h5 mb-0 text-muted" id="currentHijriDate">Loading Hijri Date...</p>
+        </div>
+        <!-- Current Time -->
+        <p class="display-5 fw-bold mb-3" id="currentTime">--:--:--</p>
+        <!-- Location Selected -->
+        <p class="h4 text-primary mb-3" id="selectedLocationDisplay">Loading Location...</p>
 
-                <!-- Next Prayer Time & Countdown -->
-                <div class="prayer-status-box p-3 rounded-3 mb-4">
-                    <p class="h3 mb-1" id="nextPrayerName">Next Prayer: N/A</p>
-                    <p class="h5 text-muted mb-2" id="nextPrayerTime">--:--</p>
-                    <p class="h2 fw-bold mb-0 text-success" id="countdownToNextPrayer">--:--:--</p>
-                </div>
-            </div>
+        <!-- Next Prayer Time & Countdown -->
+        <div class="prayer-status-box mb-4 mx-auto"> <!-- mx-auto for centering now that width is removed -->
+            <p class="h3 mb-1" id="nextPrayerName">Next Prayer: N/A</p>
+            <p class="h5 text-muted mb-2" id="nextPrayerTime">--:--</p>
+            <p class="h2 fw-bold mb-0 text-success" id="countdownToNextPrayer">--:--:--</p>
+        </div>
+    </div>
 
-            <!-- Table Of Today's Prayer Time -->
-            <div class="row w-100">
-                <div class="col-12">
-                    <h2 class="text-center mb-3 text-secondary">Today's Prayer Times</h2>
-                    <div class="p-3 border rounded-3">
-                        <div class="table-responsive">
-                            <table class="table table-striped table-hover mb-0 text-center" id="prayerTimesTable">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Imsak</th>
-                                        <th scope="col">Fajr</th>
-                                        <th scope="col">Syuruk</th>
-                                        <th scope="col">Dhuha</th>
-                                        <th scope="col">Dhuhr</th>
-                                        <th scope="col">Asr</th>
-                                        <th scope="col">Maghrib</th>
-                                        <th scope="col">Isha</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="prayerTimesTableBody">
-                                    <!-- Today's Prayer times will be displayed here -->
-                                    <tr><td colspan="8" class="text-center text-muted py-4">Select a location and click 'Sync' in settings to load today's prayer times.</td></tr>
-                                </tbody>
-                                <tfoot id="iqamaTimesTableBody">
-                                    <!-- Iqama times will be displayed here -->
-                                    <tr class="table-info">
-                                        <td colspan="8" class="text-center">Loading Iqama times...</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div> <!-- End table-responsive -->
-                    </div>
-                </div>
+    <!-- Prayer and Iqama Time Section (Bottom full-width section with table) -->
+    <div class="prayer-table-section">
+        <!-- Removed H2 title "Today's Prayer Times" -->
+        <div class="table-container"> <!-- Removed p-3 and border/rounded-3 classes -->
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0 text-center" id="prayerTimesTable">
+                    <thead>
+                        <tr>
+                            <th scope="col">Imsak</th>
+                            <th scope="col">Fajr</th>
+                            <th scope="col">Syuruk</th>
+                            <th scope="col">Dhuha</th>
+                            <th scope="col">Dhuhr</th>
+                            <th scope="col">Asr</th>
+                            <th scope="col">Maghrib</th>
+                            <th scope="col">Isha</th>
+                        </tr>
+                    </thead>
+                    <tbody id="prayerTimesTableBody">
+                        <!-- Today's Prayer times will be displayed here -->
+                        <tr><td colspan="8" class="text-center text-muted py-4">Select a location and click 'Sync' in settings to load today's prayer times.</td></tr>
+                    </tbody>
+                    <tfoot id="iqamaTimesTableBody">
+                        <!-- Iqama times will be displayed here -->
+                        <tr>
+                            <td colspan="8" class="text-center">Loading Iqama times...</td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         </div>
     </div>
