@@ -25,7 +25,7 @@ const JAKIM_ZONES = [
     { code: 'KDH06', name: 'Kedah: Langkawi' },
     { code: 'KDH07', name: 'Kedah: Gunung Jerai' },
     { code: 'KTN01', name: 'Kelantan: Bachok, Kota Bharu, Machang, Pasir Mas, Pasir Puteh, Tanah Merah, Tumpat, Kuala Krai, Mukim Chiku' },
-    { code: 'KTN03', name: 'Kelantan: Gua Musang (Daerah Galas Dan Bertam), Jeli' },
+    { code: 'KTN03', name: 'Kelantan: Gua Musang (Daerah Galas And Bertam), Jeli' },
     { code: 'MLK01', name: 'Melaka: SELURUH NEGERI MELAKA' },
     { code: 'NGS01', name: 'Negeri Sembilan: Tampin, Jempol' },
     { code: 'NGS02', name: 'Negeri Sembilan: Jelebu, Kuala Pilah, Port Dickson, Rembau, Seremban' },
@@ -185,7 +185,8 @@ let autoSyncSettings = {
     frequency: 'weekly', // 'weekly', 'bi-weekly', 'monthly'
     day: 0, // Day of week (0-6, Sunday-Saturday)
     time: '03:00', // HH:MM
-    lastAutoSync: null // Timestamp of last successful auto sync
+    lastAutoSync: null, // Timestamp of last successful auto sync
+    lastNextYearSyncAttempt: null // Timestamp of last attempt to sync next year's data
 };
 
 // Display State Management (NEW)
@@ -492,6 +493,27 @@ async function getPrayerTimesForYear(locationCode, year) {
 }
 
 /**
+ * Retrieves all stored prayer time data.
+ * @returns {Promise<Array<Object>>} An array of all stored prayer time objects (id, data, timestamp).
+ */
+async function getAllStoredPrayerTimesData() {
+    try {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const data = await new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+        return data;
+    } catch (error) {
+        console.error('Error retrieving all prayer times from IndexedDB:', error);
+        return [];
+    }
+}
+
+
+/**
  * Saves a sync record to IndexedDB. (UPDATED)
  * @param {string} locationCode - The JAKIM zone code.
  * @param {string} syncMethod - 'MANUAL' or 'AUTO'.
@@ -675,10 +697,12 @@ async function fetchPrayerTimesForMonth(zone, year, month) {
  * Fetches and stores all prayer times for the current year for a selected location.
  * @param {string} locationCode - The JAKIM zone code.
  * @param {string} syncMethod - 'MANUAL' or 'AUTO'.
+ * @param {number|null} targetYear - The year to sync for. If null, uses current year.
+ * @returns {Promise<boolean>} True if sync was successful, false otherwise.
  */
-async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
+async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod, targetYear = null) {
     showLoading(true);
-    const currentYear = new Date().getFullYear();
+    const yearToSync = targetYear || new Date().getFullYear();
     let allPrayerTimes = [];
     let fetchStatus = "Failed"; // Default status
     let apiResultForHistory = null;
@@ -687,13 +711,13 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
     try {
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
-        const idToDelete = `${locationCode}_${currentYear}`;
+        const idToDelete = `${locationCode}_${yearToSync}`;
         await new Promise((resolve, reject) => {
             const request = store.delete(idToDelete);
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
         });
-        console.log(`Cleared existing data for ${locationCode} (${currentYear}) from IndexedDB.`);
+        console.log(`Cleared existing data for ${locationCode} (${yearToSync}) from IndexedDB.`);
     } catch (error) {
         console.error('Error clearing old data from IndexedDB:', error);
     }
@@ -703,7 +727,7 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
         let failedMonths = [];
 
         for (let month = 1; month <= 12; month++) {
-            const monthlyData = await fetchPrayerTimesForMonth(locationCode, currentYear, month);
+            const monthlyData = await fetchPrayerTimesForMonth(locationCode, yearToSync, month);
             if (monthlyData.length > 0) {
                 allPrayerTimes = allPrayerTimes.concat(monthlyData);
                 successfulMonthsCount++;
@@ -723,30 +747,38 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
                 return parseDate(a.date) - parseDate(b.date);
             });
 
-            await savePrayerTimes(locationCode, currentYear, allPrayerTimes);
+            await savePrayerTimes(locationCode, yearToSync, allPrayerTimes);
             
             fetchStatus = "Successful"; // At least some data was retrieved and saved
             if (failedMonths.length > 0) {
                  apiResultForHistory = `Warning: Data for month(s) ${failedMonths.join(', ')} could not be fetched or was empty.`;
             }
 
-            let message = `Prayer times for ${JAKIM_ZONES.find(z => z.code === locationCode).name} for ${currentYear} have been synchronized successfully.`;
+            let message = `Prayer times for ${JAKIM_ZONES.find(z => z.code === locationCode).name} for ${yearToSync} have been synchronized successfully.`;
             if (failedMonths.length > 0) {
                 message += `<br> <span class="text-warning">Warning: Could not fetch data for month(s): ${failedMonths.join(', ')}. The API might not have data for these months yet.</span>`;
             }
-            showMessage('Sync Complete', message);
-            // Don't call displayPrayerTimes here; it's handled by the main DOMContentLoaded flow or manual sync.
+            if (syncMethod !== 'AUTO_INITIAL') { // Don't show message for silent initial auto sync
+                showMessage('Sync Complete', message);
+            }
+            return true; // Indicate success
         } else {
             fetchStatus = "Failed"; // No data at all
-            apiResultForHistory = "Could not fetch any prayer times for the selected location and year. The API might not have data available for the current year yet, or there was an issue with the fetch. Please try again later.";
-            showMessage('Sync Failed', apiResultForHistory);
+            apiResultForHistory = `Could not fetch any prayer times for ${JAKIM_ZONES.find(z => z.code === locationCode).name} for ${yearToSync}. The API might not have data available for the current year yet, or there was an issue with the fetch. Please try again later.`;
+            if (syncMethod !== 'AUTO_INITIAL') { // Don't show message for silent initial auto sync
+                showMessage('Sync Failed', apiResultForHistory);
+            }
+            return false; // Indicate failure
         }
 
     } catch (error) {
         fetchStatus = "Failed";
         apiResultForHistory = `An error occurred during synchronization: ${error.message}. Please check your internet connection and try again.`;
         console.error('Error during full year sync:', error);
-        showMessage('Error', apiResultForHistory);
+        if (syncMethod !== 'AUTO_INITIAL') { // Don't show message for silent initial auto sync
+            showMessage('Error', apiResultForHistory);
+        }
+        return false; // Indicate failure
     } finally {
         await addSyncRecord(locationCode, syncMethod, fetchStatus, apiResultForHistory); // Add record at the end
         showLoading(false);
@@ -866,7 +898,7 @@ async function displayPrayerTimes(locationCode, year) {
     const todayFormattedForComparison = today.toISOString().slice(0, 10); //YYYY-MM-DD
     const originalZoneName = JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode;
 
-    // Reset announced prayers for a new day
+    // Reset announced prayers for a new day if date has changed
     if (announcedPrayersToday.date !== todayFormattedForComparison) {
         announcedPrayersToday = {
             date: todayFormattedForComparison,
@@ -906,15 +938,8 @@ async function displayPrayerTimes(locationCode, year) {
     // 2. If data for selected zone is missing, try to find a fallback zone
     if (!todayData) {
         console.warn(`Prayer data missing for selected zone (${locationCode}). Searching for fallback...`);
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
         
-        // Iterate over all available prayer time data in IndexedDB
-        const allStoredPrayerTimes = await new Promise((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        const allStoredPrayerTimes = await getAllStoredPrayerTimesData();
 
         // Find a fallback from *any* stored zone data
         for (const storedData of allStoredPrayerTimes) {
@@ -1191,32 +1216,49 @@ function startPostIqamaMessage() {
 
 /**
  * Returns the display to the Main Display.
+ * This function also refreshes `todayPrayerDataGlobal` based on the current actual date.
  */
-function returnToMainDisplay() {
+async function returnToMainDisplay() {
     if (nextPrayerTimeout) clearTimeout(nextPrayerTimeout);
     if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval);
     activePrayerDetails = null; // Clear active prayer details
 
     showDisplay('main');
-    // Update main display content immediately
-    updateClockAndPrayerStatus(); // This will also re-establish the main loop timer
-    console.log('Returned to Main Display.');
+    
+    // Crucially, re-call displayPrayerTimes to refresh data for the *current actual day*
+    // This will fetch updated todayPrayerDataGlobal if the day has changed
+    const currentCode = locationSelect.value;
+    const currentYear = new Date().getFullYear();
+    await displayPrayerTimes(currentCode, currentYear);
+    // The main clock update loop will be re-established by displayPrayerTimes
+    console.log('Returned to Main Display and refreshed.');
 }
 
 
 /**
  * Updates the current time, and determines/displays the next prayer time and its countdown.
  * This function also handles transitions to announcement displays.
+ * It now ensures todayPrayerDataGlobal is always fresh for the current date.
  */
-function updateClockAndPrayerStatus() {
+async function updateClockAndPrayerStatus() {
     const now = new Date();
     currentTimeDisplay.textContent = formatTime(`${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`, true);
+
+    const todayFormattedForComparison = now.toISOString().slice(0, 10);
+
+    // If the global prayer data is for a different day, refresh it first
+    if (!todayPrayerDataGlobal || announcedPrayersToday.date !== todayFormattedForComparison) {
+        const currentCode = locationSelect.value;
+        const currentYear = now.getFullYear();
+        await displayPrayerTimes(currentCode, currentYear); // This will update todayPrayerDataGlobal
+        // If displayPrayerTimes handles a data refresh, it will also call updateClockAndPrayerStatus again.
+        return; // Exit current execution to avoid stale data issues.
+    }
 
     // If currently not on main display, just update current time and maintain sequence
     // Or if debug mode is enabled, skip auto announcements
     if (currentDisplayState !== 'main' || debugModeEnabled) {
         if (currentDisplayState === 'main' && debugModeEnabled) {
-            // If in main display and debug mode is on, ensure no auto-announcements trigger
             console.log("Debug mode is ON. Automatic prayer announcements are suppressed.");
         }
         nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000);
@@ -1286,41 +1328,37 @@ function updateClockAndPrayerStatus() {
     if (!nextEventForMainDisplay) {
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
+        // Ensure tomorrow's year is correct if it's Dec 31st
+        const tomorrowYear = tomorrow.getFullYear();
         const tomorrowFormattedForComparison = tomorrow.toISOString().slice(0, 10);
 
-        getPrayerTimesForYear(locationSelect.value, tomorrow.getFullYear()).then(tomorrowDataAll => {
-            let tomorrowFajrData = null;
-            if (tomorrowDataAll && tomorrowDataAll.length > 0) {
-                 tomorrowFajrData = tomorrowDataAll.find(d => {
-                    const parts = d.date.split('-');
-                    const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
-                    const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
-                    return apiDateFormatted === tomorrowFormattedForComparison;
-                });
-            }
+        const tomorrowDataAll = await getPrayerTimesForYear(locationSelect.value, tomorrowYear);
+        let tomorrowFajrData = null;
 
-            if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr.trim() !== '--:--') {
-                const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
-                const tomorrowFajrDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
-                
-                nextPrayerNameDisplay.textContent = `Next: Fajr (Tomorrow)`;
-                nextPrayerTimeDisplay.textContent = formatTime(tomorrowFajrData.fajr, false);
-                const diffMsTomorrow = tomorrowFajrDateTime.getTime() - now.getTime();
-                const totalSecondsTomorrow = Math.floor(diffMsTomorrow / 1000);
-                countdownToNextPrayerDisplay.textContent = formatCountdown(totalSecondsTomorrow);
-            } else {
-                nextPrayerNameDisplay.textContent = 'No Next Prayer Data';
-                nextPrayerTimeDisplay.textContent = '---';
-                countdownToNextPrayerDisplay.textContent = '---';
-            }
-            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
-        }).catch(error => {
-            console.error("Error fetching tomorrow's data:", error);
-            nextPrayerNameDisplay.textContent = 'Error Loading Next Prayer';
+        if (tomorrowDataAll && tomorrowDataAll.length > 0) {
+            tomorrowFajrData = tomorrowDataAll.find(d => {
+                const parts = d.date.split('-');
+                const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
+                const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
+                return apiDateFormatted === tomorrowFormattedForComparison;
+            });
+        }
+
+        if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr.trim() !== '--:--') {
+            const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
+            const tomorrowFajrDateTime = new Date(tomorrowYear, tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
+            
+            nextPrayerNameDisplay.textContent = `Next: Fajr (Tomorrow)`;
+            nextPrayerTimeDisplay.textContent = formatTime(tomorrowFajrData.fajr, false);
+            const diffMsTomorrow = tomorrowFajrDateTime.getTime() - now.getTime();
+            const totalSecondsTomorrow = Math.floor(diffMsTomorrow / 1000);
+            countdownToNextPrayerDisplay.textContent = formatCountdown(totalSecondsTomorrow);
+        } else {
+            nextPrayerNameDisplay.textContent = 'No Next Prayer Data';
             nextPrayerTimeDisplay.textContent = '---';
             countdownToNextPrayerDisplay.textContent = '---';
-            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
-        });
+        }
+        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
     } else {
         // Update main display with next upcoming prayer
         nextPrayerNameDisplay.textContent = `Next: ${nextEventForMainDisplay.name}`;
@@ -1574,8 +1612,63 @@ async function checkAndRunAutoSync() {
     if (syncDue) {
         console.log('Auto sync is due. Initiating...');
         await fetchAndStoreAllPrayerTimes(locationSelect.value, 'AUTO');
+        // After auto sync, refresh display to ensure latest data is shown
+        await displayPrayerTimes(locationSelect.value, new Date().getFullYear());
     } else {
         console.log('Auto sync not due yet. Next possible sync check:', nextPossibleSync.toLocaleString());
+    }
+}
+
+
+/**
+ * Handles the annual sync logic for the next year's prayer times.
+ * This should run on Dec 31st or during the first week of Jan.
+ */
+async function handleAnnualSync() {
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0-indexed
+    const currentDay = now.getDate();
+    const currentYear = now.getFullYear();
+    const nextYear = currentYear + 1;
+
+    const lastAttempt = autoSyncSettings.lastNextYearSyncAttempt ? new Date(autoSyncSettings.lastNextYearSyncAttempt) : null;
+    let shouldAttemptSync = false;
+
+    // Condition 1: It's December 31st and no attempt has been made today
+    if (currentMonth === 11 && currentDay === 31) { // December is month 11
+        if (!lastAttempt || lastAttempt.getFullYear() !== currentYear || lastAttempt.getMonth() !== 11 || lastAttempt.getDate() !== 31) {
+            shouldAttemptSync = true;
+            console.log("It's December 31st. Initiating next year's prayer time sync.");
+        }
+    } 
+    // Condition 2: It's January 1st to 7th of the next year, and the last attempt was before this year or failed within this year.
+    else if (currentMonth === 0 && currentDay >= 1 && currentDay <= 7) { // January is month 0
+        if (!lastAttempt || lastAttempt.getFullYear() < currentYear) {
+            // If no attempt last year, or last attempt was for a previous year
+            shouldAttemptSync = true;
+            console.log(`It's Jan ${currentDay}. Attempting next year's prayer time sync (retry logic).`);
+        } else if (lastAttempt.getFullYear() === currentYear && lastAttempt.getMonth() === 0 && lastAttempt.getDate() < currentDay) {
+            // If attempt was already made this Jan, but on an earlier day (retry logic within first week)
+            shouldAttemptSync = true;
+            console.log(`It's Jan ${currentDay}. Attempting next year's prayer time sync (daily retry within first week).`);
+        }
+    }
+
+    if (shouldAttemptSync) {
+        autoSyncSettings.lastNextYearSyncAttempt = now.toISOString(); // Record attempt time
+        await saveSetting('autoSync', autoSyncSettings); // Save updated autoSync settings
+
+        console.log(`Attempting to sync prayer times for year ${nextYear} for zone ${locationSelect.value}.`);
+        const success = await fetchAndStoreAllPrayerTimes(locationSelect.value, 'AUTO_ANNUAL', nextYear);
+        
+        if (success) {
+            console.log(`Successfully synced prayer times for ${nextYear}.`);
+        } else {
+            console.warn(`Failed to sync prayer times for ${nextYear}. Will retry later.`);
+            // No explicit modal here, as fetchAndStoreAllPrayerTimes already displays it if it was not 'AUTO_INITIAL'
+        }
+    } else {
+        console.log("No annual sync due yet.");
     }
 }
 
@@ -1772,21 +1865,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     const initialLocationCode = locationSelect.value;
     const currentYear = new Date().getFullYear();
     
-    // Check if prayer data exists for the initial/default zone
-    const existingData = await getPrayerTimesForYear(initialLocationCode, currentYear);
+    // Check if prayer data exists for the initial/default zone for the current year
+    const existingDataForCurrentYear = await getPrayerTimesForYear(initialLocationCode, currentYear);
     const todayFormattedForComparison = new Date().toISOString().slice(0, 10);
-    const todayDataExists = existingData && existingData.find(dayData => {
+    const todayDataExistsInCurrentYear = existingDataForCurrentYear && existingDataForCurrentYear.find(dayData => {
         const parts = dayData.date.split('-');
         const monthNum = API_MONTH_MAP[parts[1]];
         const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
         return apiDateFormatted === todayFormattedForComparison;
     });
 
-    if (!todayDataExists) {
+    if (!todayDataExistsInCurrentYear) {
         console.log(`No prayer data for ${initialLocationCode} (${currentYear}) found. Attempting initial sync.`);
         // Proactively sync data if missing on first load
         try {
-            await fetchAndStoreAllPrayerTimes(initialLocationCode, 'AUTO_INITIAL'); // Using new sync method 'AUTO_INITIAL'
+            await fetchAndStoreAllPrayerTimes(initialLocationCode, 'AUTO_INITIAL', currentYear); 
         } catch (error) {
             console.error("Initial sync failed:", error);
             // fetchAndStoreAllPrayerTimes already shows a message on failure.
@@ -1797,8 +1890,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Always attempt to display prayer times after initial setup/sync attempt
     await displayPrayerTimes(initialLocationCode, currentYear);
 
-    // Check and run auto sync after initial display (NEW)
+    // Check and run auto sync for current year after initial display (NEW)
     checkAndRunAutoSync();
+
+    // Handle annual sync for next year (NEW)
+    handleAnnualSync();
+
 
     // Theme switch listener
     darkModeSwitch.addEventListener('change', async (event) => {
@@ -1826,8 +1923,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add click listener for sync button (inside Offcanvas)
     syncButton.addEventListener('click', async () => {
         const selectedLocation = locationSelect.value;
-        await fetchAndStoreAllPrayerTimes(selectedLocation, 'MANUAL'); // Pass 'MANUAL' sync method
-        await displayPrayerTimes(selectedLocation, new Date().getFullYear()); // Re-display after manual sync
+        const syncSuccess = await fetchAndStoreAllPrayerTimes(selectedLocation, 'MANUAL', new Date().getFullYear()); // Pass 'MANUAL' sync method
+        if (syncSuccess) {
+            await displayPrayerTimes(selectedLocation, new Date().getFullYear()); // Re-display after manual sync
+        }
     });
 
     // Add input listeners for Iqama offset fields

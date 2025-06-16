@@ -85,7 +85,7 @@ body {
 /* New Display Section styling */
 .display-section {
     width: 100%;
-    padding: 2rem 1rem; /* Keep internal padding for content spacing */
+    /* Removed padding: 2rem 1rem; */
     background-color: var(--display-section-bg);
     transition: background-color 0.3s ease;
     display: flex; /* Use flex for content alignment */
@@ -165,10 +165,7 @@ body {
 /* New Prayer Table Section styling */
 .prayer-table-section {
     width: 100%;
-    padding-top: 1rem; /* Add minimal top padding to separate from display section content */
-    padding-bottom: 1rem; /* Add minimal bottom padding */
-    padding-left: 0; /* Remove horizontal padding */
-    padding-right: 0; /* Remove horizontal padding */
+    /* Removed padding-top: 1rem; padding-bottom: 1rem; */
     background-color: var(--table-section-bg);
     border-top: 1px solid var(--border-color); /* Separator line between sections */
     transition: background-color 0.3s ease, border-color 0.3s ease;
@@ -338,7 +335,7 @@ body.dark-mode .btn-warning {
     color: var(--table-header-color) !important;
     vertical-align: middle;
     padding: 0.75rem;
-    font-size: 0.9rem;
+    font-size: 0.9rem; /* Default font size for smaller screens */
     border-bottom: 2px solid var(--table-header-bg);
     text-align: center;
     transition: background-color 0.3s ease, color 0.3s ease;
@@ -353,7 +350,7 @@ body.dark-mode .btn-warning {
 .table tfoot td {
     vertical-align: middle;
     padding: 0.75rem;
-    font-size: 1.1rem;
+    font-size: 1.1rem; /* Default font size for smaller screens */
     font-weight: 700;
     text-align: center;
     border-top: 1px solid var(--border-color); /* Maintain consistent border */
@@ -388,6 +385,13 @@ body.dark-mode .btn-warning {
 
 .table-hover > tbody > tr:hover > * {
     background-color: var(--table-hover-bg) !important;
+}
+
+/* Highlight for current day */
+.highlight-today {
+    background-color: var(--heading-color) !important; /* Uses primary blue */
+    color: white !important; /* White text for contrast */
+    font-weight: bold;
 }
 
 
@@ -554,6 +558,18 @@ body.dark-mode .btn-warning {
     }
 
 }
+
+/* Desktop / Larger Screens Font Size for Table */
+@media (min-width: 992px) { /* Adjust breakpoint as needed (lg breakpoint in Bootstrap) */
+    .table tbody td,
+    .table tfoot td {
+        font-size: 1.3rem; /* Increased font size for desktop */
+    }
+    .table thead th {
+        font-size: 1.3rem; /* Increased header font size for desktop */
+    }
+}
+
 
 /* Keep these modal stylings, they apply to all modals */
 .modal-content {
