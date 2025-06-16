@@ -2,10 +2,10 @@
 
 // Constants for IndexedDB
 const DB_NAME = 'PrayerTimesDB';
-const DB_VERSION = 2; // Increment DB version for new object store
+const DB_VERSION = 3; // Incremented DB version for new settings object store
 const STORE_NAME = 'prayerTimesStore'; // Stores data for each location + year
-const SYNC_HISTORY_STORE_NAME = 'syncHistoryStore'; // NEW: Store for sync records
-const SETTINGS_KEY = 'prayerTimeSettings'; // Key for saving settings in localStorage
+const SYNC_HISTORY_STORE_NAME = 'syncHistoryStore'; // Store for sync records
+const SETTINGS_STORE_NAME = 'appSettingsStore'; // NEW: Store for general app settings
 
 // JAKIM API Base URL
 // Note: The API is undocumented and its behavior might change.
@@ -143,6 +143,17 @@ const autoSyncFrequencyRadios = document.querySelectorAll('input[name="autoSyncF
 const autoSyncDaySelect = document.getElementById('autoSyncDay');
 const autoSyncTimeInput = document.getElementById('autoSyncTime');
 
+// Debug UI Elements (NEW)
+const debugModeSwitch = document.getElementById('debugModeSwitch');
+const debugButtonsContainer = document.getElementById('debugButtonsContainer');
+const simPrayerAnnounceBtn = document.getElementById('simPrayerAnnounceBtn');
+const simPrayerSelect = document.getElementById('simPrayerSelect'); // New select for prayer
+const simIqamaCountdownBtn = document.getElementById('simIqamaCountdownBtn');
+const simIqamaDurationInput = document.getElementById('simIqamaDuration'); // New input for duration
+const simPostIqamaBtn = document.getElementById('simPostIqamaBtn');
+const returnToMainBtn = document.getElementById('returnToMainBtn');
+const resetAnnouncedPrayersBtn = document.getElementById('resetAnnouncedPrayersBtn');
+
 
 let db; // IndexedDB instance
 let todayPrayerDataGlobal = null; // Store today's prayer data globally for clock updates
@@ -174,7 +185,7 @@ let autoSyncSettings = {
 let currentDisplayState = 'main'; // 'main', 'announcement', 'iqamaCountdown', 'postIqamaMessage'
 // To prevent repeated announcements on the same day
 let announcedPrayersToday = {
-    date: null, // YYYY-MM-DD
+    date: null, //YYYY-MM-DD
     fajr: false,
     dhuhr: false,
     asr: false,
@@ -182,6 +193,9 @@ let announcedPrayersToday = {
     isha: false
 };
 let activePrayerDetails = null; // Stores details for the prayer currently in announcement/iqama phase
+
+// Debug Mode State (NEW, managed by UI switch and stored in IndexedDB)
+let debugModeEnabled = false;
 
 
 /**
@@ -257,16 +271,16 @@ function setTheme(mode) {
         if (prayerTimesTable && !prayerTimesTable.classList.contains('table-dark')) {
             prayerTimesTable.classList.add('table-dark');
         }
-        localStorage.setItem('theme', 'dark');
         darkModeSwitch.checked = true;
     } else {
         body.classList.remove('dark-mode');
         if (prayerTimesTable) {
             prayerTimesTable.classList.remove('table-dark'); // Always remove in light mode
         }
-        localStorage.setItem('theme', 'light');
         darkModeSwitch.checked = false;
     }
+    // Note: Saving to IndexedDB is handled by the darkModeSwitch event listener
+    // calling saveAllSettings, not directly by this function.
 }
 
 /**
@@ -286,13 +300,71 @@ function openDatabase() {
             } else {
                 console.log('IndexedDB: prayerTimesStore already exists.');
             }
-            // Create object store for sync history (NEW)
+            // Create object store for sync history
             if (!db.objectStoreNames.contains(SYNC_HISTORY_STORE_NAME)) {
-                // Use { keyPath: 'id', autoIncrement: true } for a store where you add records
                 db.createObjectStore(SYNC_HISTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
                 console.log('IndexedDB upgrade: syncHistoryStore created.');
             } else {
                 console.log('IndexedDB: syncHistoryStore already exists.');
+            }
+            // Create object store for app settings (NEW)
+            if (!db.objectStoreNames.contains(SETTINGS_STORE_NAME)) {
+                db.createObjectStore(SETTINGS_STORE_NAME, { keyPath: 'name' });
+                console.log('IndexedDB upgrade: appSettingsStore created.');
+
+                // --- Migration Logic from localStorage to IndexedDB (One-time on upgrade) ---
+                console.log("Attempting migration from localStorage to IndexedDB...");
+                const transaction = event.target.transaction; // Use transaction from upgradeneeded event
+                const settingsStore = transaction.objectStore(SETTINGS_STORE_NAME);
+
+                // Migrate existing settings object from localStorage
+                const oldSettingsString = localStorage.getItem('prayerTimeSettings');
+                if (oldSettingsString) {
+                    try {
+                        const oldSettings = JSON.parse(oldSettingsString);
+                        if (oldSettings.iqamaOffsets) {
+                            settingsStore.put({ name: 'iqamaOffsets', value: oldSettings.iqamaOffsets });
+                            console.log('Migrated iqamaOffsets from localStorage.');
+                        }
+                        if (oldSettings.use24HourFormat !== undefined) {
+                            settingsStore.put({ name: 'use24HourFormat', value: oldSettings.use24HourFormat });
+                            console.log('Migrated use24HourFormat from localStorage.');
+                        }
+                        if (oldSettings.autoSync) {
+                            settingsStore.put({ name: 'autoSync', value: oldSettings.autoSync });
+                            console.log('Migrated autoSync from localStorage.');
+                        }
+                        if (oldSettings.debugModeEnabled !== undefined) {
+                            settingsStore.put({ name: 'debugModeEnabled', value: oldSettings.debugModeEnabled });
+                            console.log('Migrated debugModeEnabled from localStorage.');
+                        }
+                        localStorage.removeItem('prayerTimeSettings'); // Clean up old localStorage entry
+                        console.log('Removed old prayerTimeSettings from localStorage.');
+                    } catch (e) {
+                        console.error("Error migrating old settings from localStorage:", e);
+                    }
+                }
+
+                // Migrate last selected location from localStorage
+                const oldLastLocation = localStorage.getItem('lastSelectedLocation');
+                if (oldLastLocation) {
+                    settingsStore.put({ name: 'lastSelectedLocation', value: oldLastLocation });
+                    console.log('Migrated lastSelectedLocation from localStorage.');
+                    localStorage.removeItem('lastSelectedLocation'); // Clean up old localStorage entry
+                    console.log('Removed old lastSelectedLocation from localStorage.');
+                }
+
+                // Migrate theme from localStorage (separately, as it might not have been in prayerTimeSettings)
+                const oldTheme = localStorage.getItem('theme');
+                if (oldTheme) {
+                    settingsStore.put({ name: 'theme', value: oldTheme });
+                    console.log('Migrated theme from localStorage.');
+                    // Keeping localStorage.removeItem('theme') here for the theme key specifically,
+                    // in case it was stored independently before.
+                    localStorage.removeItem('theme');
+                    console.log('Removed old theme from localStorage.');
+                }
+                // ------------------------------------------------------------------------
             }
         };
 
@@ -309,6 +381,48 @@ function openDatabase() {
         };
     });
 }
+
+/**
+ * Saves a single setting to IndexedDB.
+ * @param {string} name - The name of the setting.
+ * @param {*} value - The value of the setting.
+ */
+async function saveSetting(name, value) {
+    try {
+        const transaction = db.transaction([SETTINGS_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(SETTINGS_STORE_NAME);
+        await new Promise((resolve, reject) => {
+            const request = store.put({ name: name, value: value });
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+        // console.log(`Setting '${name}' saved to IndexedDB.`);
+    } catch (error) {
+        console.error(`Error saving setting '${name}' to IndexedDB:`, error);
+    }
+}
+
+/**
+ * Loads a single setting from IndexedDB.
+ * @param {string} name - The name of the setting.
+ * @returns {Promise<*|undefined>} The value of the setting or undefined if not found.
+ */
+async function loadSetting(name) {
+    try {
+        const transaction = db.transaction([SETTINGS_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(SETTINGS_STORE_NAME);
+        const data = await new Promise((resolve, reject) => {
+            const request = store.get(name);
+            request.onsuccess = () => resolve(request.result ? request.result.value : undefined);
+            request.onerror = () => reject(request.error);
+        });
+        return data;
+    } catch (error) {
+        console.error(`Error loading setting '${name}' from IndexedDB:`, error);
+        return undefined;
+    }
+}
+
 
 /**
  * Saves prayer times data for a specific location and year to IndexedDB.
@@ -492,7 +606,7 @@ async function fetchPrayerTimesForMonth(zone, year, month) {
             console.log(`Successfully fetched prayer data for ${zone} - ${year}/${month}`);
             return data.prayerTime;
         } else {
-            console.warn(`No prayer data found for ${zone} - ${year}/${month}: API returned status '${data.status}' or empty prayerTime array. This might indicate an issue with the API data for this period.`);
+            console.warn(`No prayer data found for ${zone} - ${year}/${month}: API returned status '${data.status}' or empty prayerTime array.`);
             return []; // Return empty array if no valid data is found
         }
     } catch (error) {
@@ -556,7 +670,7 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
             // Update lastAutoSync only if it was an auto sync
             if (syncMethod === 'AUTO') {
                 autoSyncSettings.lastAutoSync = Date.now();
-                saveSettings(); // Save updated auto sync settings
+                await saveSetting('autoSync', autoSyncSettings); // Save auto sync settings to IndexedDB
             }
 
             let message = `Prayer times for ${JAKIM_ZONES.find(z => z.code === locationCode).name} for ${currentYear} have been synchronized successfully.`;
@@ -581,7 +695,7 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
 /**
  * Populates the location select dropdown with JAKIM zones and loads last selected.
  */
-function populateLocationSelect() {
+async function populateLocationSelect() {
     // Ensure locationSelect is available before manipulating
     if (!locationSelect) {
         console.error("Location select element not found!");
@@ -595,8 +709,8 @@ function populateLocationSelect() {
         locationSelect.appendChild(option);
     });
 
-    // Load last selected location
-    const savedLocation = localStorage.getItem('lastSelectedLocation');
+    // Load last selected location from IndexedDB
+    const savedLocation = await loadSetting('lastSelectedLocation');
     if (savedLocation && JAKIM_ZONES.some(zone => zone.code === savedLocation)) {
         locationSelect.value = savedLocation;
     } else {
@@ -608,7 +722,7 @@ function populateLocationSelect() {
 }
 
 /**
- * Formats a Miladi date into "DD Mon. YYYY Miladi" format.
+ * Formats a Miladi date into "DD Mon.്യാപ Miladi" format.
  * @param {Date} date - The Miladi date object.
  * @returns {string} Formatted date string.
  */
@@ -618,7 +732,7 @@ function formatMiladiDate(date) {
 }
 
 /**
- * Formats a Hijri date string from "YYYY-MM-DD" to "DD MonthName YYYY Hijri".
+ * Formats a Hijri date string from "YYYY-MM-DD" to "DD MonthNameব্যাপ Hijri".
  * @param {string} hijriDateStr - The Hijri date string from API (e.g., "1446-07-01").
  * @returns {string} Formatted Hijri date string.
  */
@@ -703,7 +817,7 @@ async function displayPrayerTimes(locationCode, year) {
             const lastSyncDate = new Date(autoSyncSettings.lastAutoSync).toISOString().slice(0,10);
             if (lastSyncDate !== todayFormattedForComparison) {
                 autoSyncSettings.lastAutoSync = null; // Forces a check next time auto sync is enabled/app loads
-                saveSettings();
+                await saveSetting('autoSync', autoSyncSettings);
             }
         }
     }
@@ -714,7 +828,7 @@ async function displayPrayerTimes(locationCode, year) {
         todayData = data.find(dayData => {
             const parts = dayData.date.split('-'); // e.g., "01-Jan-2025"
             const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
-            const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`; // Convert to YYYY-MM-DD
+            const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`; // Convert to Drapeau-MM-DD
             return apiDateFormatted === todayFormattedForComparison;
         });
     }
@@ -817,6 +931,7 @@ function showDisplay(mode) {
  */
 function startPrayerAnnouncement(prayerNameKey, prayerTimeStr, zoneName) {
     if (currentDisplayState === 'announcement' || currentDisplayState === 'iqamaCountdown' || currentDisplayState === 'postIqamaMessage') {
+        console.log("Already in an announcement sequence. Skipping new announcement.");
         return; // Already in an announcement sequence
     }
 
@@ -835,7 +950,8 @@ function startPrayerAnnouncement(prayerNameKey, prayerTimeStr, zoneName) {
         name: PRAYER_NAMES_MAP[prayerNameKey],
         time: prayerTimeStr,
         zone: zoneName,
-        iqamaTime: calculateIqamaTime(todayPrayerDataGlobal[prayerNameKey], iqamaOffsets[prayerNameKey])
+        // Ensure todayPrayerDataGlobal is not null before accessing its properties
+        iqamaTime: todayPrayerDataGlobal ? calculateIqamaTime(todayPrayerDataGlobal[prayerNameKey], iqamaOffsets[prayerNameKey]) : '--:--'
     };
 
     announcementPrayerName.textContent = activePrayerDetails.name.toUpperCase();
@@ -847,17 +963,28 @@ function startPrayerAnnouncement(prayerNameKey, prayerTimeStr, zoneName) {
 
     // After 30 seconds, transition to Iqama Countdown
     nextPrayerTimeout = setTimeout(() => {
-        startIqamaCountdown();
+        if (activePrayerDetails) {
+            // Pass a simulated duration for Iqama Countdown if debug mode is enabled
+            if (debugModeEnabled) {
+                startIqamaCountdown(30); // Simulate 30 seconds for Iqama countdown after announcement
+            } else {
+                startIqamaCountdown(); // Normal flow: use actual Iqama time
+            }
+        } else {
+            console.warn("Active prayer details missing, returning to main display after announcement.");
+            returnToMainDisplay();
+        }
     }, 30000); // 30 seconds for announcement
     console.log(`Prayer Announcement for ${activePrayerDetails.name} started. Next: Iqama Countdown in 30s.`);
 }
 
 /**
  * Triggers the Iqama Countdown display.
+ * @param {number|null} [simulatedDurationSeconds=null] - Optional. If provided, sets a simulated countdown duration. Default is 45s for simulation.
  */
-function startIqamaCountdown() {
+function startIqamaCountdown(simulatedDurationSeconds = null) {
     if (!activePrayerDetails) {
-        console.error("No active prayer details for Iqama countdown.");
+        console.error("No active prayer details for Iqama countdown. Returning to main display.");
         returnToMainDisplay();
         return;
     }
@@ -868,17 +995,31 @@ function startIqamaCountdown() {
 
     showDisplay('iqamaCountdown');
 
-    const [iqamaHours, iqamaMinutes] = activePrayerDetails.iqamaTime.split(':').map(Number);
-    const iqamaDateTime = new Date();
-    iqamaDateTime.setHours(iqamaHours, iqamaMinutes, 0, 0);
+    // Determine the target time for the countdown
+    let iqamaTargetDateTime;
+    if (simulatedDurationSeconds !== null) {
+        // For simulation, calculate target time from now
+        iqamaTargetDateTime = new Date(Date.now() + simulatedDurationSeconds * 1000);
+        console.log(`Simulating Iqama Countdown for ${simulatedDurationSeconds} seconds.`);
+    } else {
+        // For actual prayer, use the calculated Iqama time
+        const [iqamaHours, iqamaMinutes] = activePrayerDetails.iqamaTime.split(':').map(Number);
+        iqamaTargetDateTime = new Date();
+        iqamaTargetDateTime.setHours(iqamaHours, iqamaMinutes, 0, 0);
+        console.log(`Actual Iqama Countdown started for ${activePrayerDetails.name}.`);
+    }
 
     // Clear any existing countdown interval
     if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval);
 
+    // Initial setting of color to green
+    iqamaCountdown.classList.remove('text-danger-custom', 'text-warning-custom');
+    iqamaCountdown.classList.add('text-success');
+
     // Update countdown every second
     iqamaCountdownInterval = setInterval(() => {
         const now = new Date();
-        const diffMs = iqamaDateTime.getTime() - now.getTime();
+        const diffMs = iqamaTargetDateTime.getTime() - now.getTime();
 
         if (diffMs < 0) {
             iqamaCountdown.textContent = '00:00:00';
@@ -887,6 +1028,17 @@ function startIqamaCountdown() {
             startPostIqamaMessage();
         } else {
             const totalSeconds = Math.floor(diffMs / 1000);
+
+            // Apply colors based on remaining time
+            iqamaCountdown.classList.remove('text-success', 'text-warning-custom', 'text-danger-custom'); // Clear all first
+            if (totalSeconds <= 15) {
+                iqamaCountdown.classList.add('text-danger-custom'); // Red for <= 15s
+            } else if (totalSeconds <= 30) {
+                iqamaCountdown.classList.add('text-warning-custom'); // Orange for > 15s and <= 30s
+            } else {
+                iqamaCountdown.classList.add('text-success'); // Green for > 30s
+            }
+
             const hours = Math.floor(totalSeconds / 3600);
             const minutes = Math.floor((totalSeconds % 3600) / 60);
             const seconds = totalSeconds % 60;
@@ -897,7 +1049,6 @@ function startIqamaCountdown() {
                 `${String(seconds).padStart(2, '0')}`;
         }
     }, 1000); // Update every second
-    console.log(`Iqama Countdown for ${activePrayerDetails.name} started.`);
 }
 
 /**
@@ -940,9 +1091,12 @@ function updateClockAndPrayerStatus() {
     currentTimeDisplay.textContent = formatTime(`${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`, true);
 
     // If currently not on main display, just update current time and maintain sequence
-    if (currentDisplayState !== 'main') {
-        // If in Iqama Countdown, its own interval handles updates
-        // If in Announcement or Post-Iqama, content is static
+    // Or if debug mode is enabled, skip auto announcements
+    if (currentDisplayState !== 'main' || debugModeEnabled) {
+        if (currentDisplayState === 'main' && debugModeEnabled) {
+            // If in main display and debug mode is on, ensure no auto-announcements trigger
+            console.log("Debug mode is ON. Automatic prayer announcements are suppressed.");
+        }
         nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000);
         return;
     }
@@ -957,7 +1111,6 @@ function updateClockAndPrayerStatus() {
     }
 
     const currentZoneName = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || 'N/A';
-
 
     let allEventsForToday = [];
 
@@ -981,7 +1134,7 @@ function updateClockAndPrayerStatus() {
 
     let nextEventForMainDisplay = null;
 
-    // Check for *Prayer Announcement* trigger for obligatory prayers
+    // Check for *Prayer Announcement* trigger for obligatory prayers (ONLY if debug mode is OFF)
     for (const key of OBLIGATORY_PRAYERS) {
         const prayerTimeStr = todayPrayerDataGlobal[key];
         if (prayerTimeStr && prayerTimeStr.trim() !== '--:--') {
@@ -997,6 +1150,7 @@ function updateClockAndPrayerStatus() {
             }
         }
     }
+
 
     // If no announcement triggered, find the next prayer for the Main Display
     for (const event of allEventsForToday) {
@@ -1074,76 +1228,89 @@ function formatCountdown(totalSeconds) {
 
 
 /**
- * Loads settings (Iqama offsets, time format, auto sync) from localStorage.
+ * Loads all settings from IndexedDB.
  */
-function loadSettings() {
-    const savedSettings = localStorage.getItem(SETTINGS_KEY);
-    if (savedSettings) {
-        try {
-            const parsedSettings = JSON.parse(savedSettings);
-            if (parsedSettings.iqamaOffsets) {
-                // Merge loaded offsets with defaults, ensuring new defaults are applied if not in saved.
-                Object.assign(iqamaOffsets, parsedSettings.iqamaOffsets);
-            }
-
-            // Load time format preference, default to true (24H) if not set
-            use24HourFormat = parsedSettings.use24HourFormat !== undefined ? parsedSettings.use24HourFormat : true;
-            timeFormatSwitch.checked = use24HourFormat; // Update the UI switch
-
-            // Load auto sync settings (NEW)
-            if (parsedSettings.autoSync) {
-                Object.assign(autoSyncSettings, parsedSettings.autoSync);
-            }
-            // Update UI for auto sync settings
-            autoSyncMasterSwitch.checked = autoSyncSettings.enabled; // Master switch
-            const selectedFrequencyRadio = document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`);
-            if (selectedFrequencyRadio) {
-                selectedFrequencyRadio.checked = true;
-            }
-            autoSyncDaySelect.value = autoSyncSettings.day;
-            autoSyncTimeInput.value = autoSyncSettings.time;
-            toggleAutoSyncScheduleOptions(); // Show/hide day/time inputs based on master switch and frequency
-        } catch (e) {
-            console.error("Error parsing saved settings from localStorage", e);
-            // If parsing fails, reset to default settings to prevent further errors
-            localStorage.removeItem(SETTINGS_KEY);
-            console.log("Cleared corrupted settings from localStorage.");
-            // Re-apply default autoSyncSettings as well
-            Object.assign(autoSyncSettings, {
-                enabled: false,
-                frequency: 'weekly',
-                day: 0,
-                time: '03:00',
-                lastAutoSync: null
-            });
-            autoSyncMasterSwitch.checked = autoSyncSettings.enabled;
-            // The default radio will be checked by HTML, ensure it's the correct one
-            document.querySelector(`input[name="autoSyncFrequency"][value="weekly"]`).checked = true;
-            autoSyncDaySelect.value = 0; // Sunday
-            autoSyncTimeInput.value = '03:00';
-            toggleAutoSyncScheduleOptions();
-        }
+async function loadSettings() {
+    const loadedIqamaOffsets = await loadSetting('iqamaOffsets');
+    if (loadedIqamaOffsets) {
+        Object.assign(iqamaOffsets, loadedIqamaOffsets);
     } else {
-        // If no settings saved, ensure switches/inputs match the default values
-        timeFormatSwitch.checked = use24HourFormat;
-        autoSyncMasterSwitch.checked = autoSyncSettings.enabled; // Should be false by default
-        document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`).checked = true;
-        autoSyncDaySelect.value = autoSyncSettings.day;
-        autoSyncTimeInput.value = autoSyncSettings.time;
-        toggleAutoSyncScheduleOptions();
+        // If no settings in IndexedDB, try migrating from localStorage (for older versions)
+        const oldSettingsString = localStorage.getItem('prayerTimeSettings');
+        if (oldSettingsString) {
+            try {
+                const oldSettings = JSON.parse(oldSettingsString);
+                if (oldSettings.iqamaOffsets) {
+                    Object.assign(iqamaOffsets, oldSettings.iqamaOffsets);
+                    await saveSetting('iqamaOffsets', iqamaOffsets);
+                }
+                // The main IndexedDB upgrade logic handles removing localStorage items,
+                // so no need to remove here during a simple load.
+            } catch (e) {
+                console.warn("Could not parse old localStorage settings for Iqama offsets during initial load.", e);
+            }
+        }
+    }
+
+    // Load time format preference
+    const loadedTimeFormat = await loadSetting('use24HourFormat');
+    if (loadedTimeFormat !== undefined) {
+        use24HourFormat = loadedTimeFormat;
+    }
+    timeFormatSwitch.checked = use24HourFormat;
+
+    // Load auto sync settings
+    const loadedAutoSync = await loadSetting('autoSync');
+    if (loadedAutoSync) {
+        Object.assign(autoSyncSettings, loadedAutoSync);
+    }
+    autoSyncMasterSwitch.checked = autoSyncSettings.enabled;
+    const selectedFrequencyRadio = document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`);
+    if (selectedFrequencyRadio) {
+        selectedFrequencyRadio.checked = true;
+    }
+    autoSyncDaySelect.value = autoSyncSettings.day;
+    autoSyncTimeInput.value = autoSyncSettings.time;
+    toggleAutoSyncScheduleOptions();
+
+    // Load debug mode setting
+    const loadedDebugMode = await loadSetting('debugModeEnabled');
+    if (loadedDebugMode !== undefined) {
+        debugModeEnabled = loadedDebugMode;
+    }
+    debugModeSwitch.checked = debugModeEnabled;
+    toggleDebugButtonsVisibility();
+
+    // Load theme setting from IndexedDB (new)
+    const loadedTheme = await loadSetting('theme');
+    if (loadedTheme !== undefined) {
+        setTheme(loadedTheme); // Apply the loaded theme
+    } else {
+        // If theme not in IndexedDB, apply default (dark) or try localStorage for migration
+        const initialLocalStorageTheme = localStorage.getItem('theme');
+        if (initialLocalStorageTheme) {
+            setTheme(initialLocalStorageTheme);
+            // Don't save to IndexedDB here, it will be saved on first theme switch
+            // The upgrade logic already handles the initial migration on DB upgrade.
+        } else {
+            setTheme('dark'); // Default theme if nothing is found anywhere
+        }
     }
 }
 
+
 /**
- * Saves settings (Iqama offsets, time format, auto sync) to localStorage.
+ * Saves current settings to IndexedDB.
  */
-function saveSettings() {
-    const settingsToSave = {
-        iqamaOffsets: iqamaOffsets,
-        use24HourFormat: use24HourFormat,
-        autoSync: autoSyncSettings // Save auto sync settings (NEW)
-    };
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
+async function saveAllSettings() {
+    await saveSetting('iqamaOffsets', iqamaOffsets);
+    await saveSetting('use24HourFormat', use24HourFormat);
+    await saveSetting('autoSync', autoSyncSettings);
+    await saveSetting('debugModeEnabled', debugModeEnabled);
+    await saveSetting('lastSelectedLocation', locationSelect.value);
+    // Explicitly save the theme state based on the current switch
+    await saveSetting('theme', darkModeSwitch.checked ? 'dark' : 'light');
+    console.log("All settings saved to IndexedDB.");
 }
 
 /**
@@ -1168,7 +1335,7 @@ function handleIqamaInputChange(event) {
 
     if (!isNaN(value) && value >= 0 && value <= 60) {
         iqamaOffsets[prayerKey] = value;
-        saveSettings(); // Save all settings
+        saveAllSettings(); // Save all settings
         // Re-display prayer times to update Iqama row and next prayer countdown
         displayPrayerTimes(locationSelect.value, new Date().getFullYear());
     } else {
@@ -1203,14 +1370,8 @@ async function checkAndRunAutoSync() {
     }
 
     const [scheduledHours, scheduledMinutes] = autoSyncSettings.time.split(':').map(Number);
-    let targetSyncDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
 
-    // If current time is *before* the scheduled time for today,
-    // and no last sync exists, or last sync was before today,
-    // then the targetSyncDateTime is still today's scheduled time.
-    // If last sync exists and happened today after scheduled time, then we need to calculate next week/month.
-
-    // Calculate next scheduled sync time from NOW, considering the frequency
+    // Calculate next possible sync time from NOW, considering the frequency
     let nextPossibleSync = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
 
     // If today's scheduled time already passed, move to tomorrow for base calculation
@@ -1288,22 +1449,152 @@ async function checkAndRunAutoSync() {
 }
 
 
+/**
+ * Toggles the visibility of the debug buttons. (NEW)
+ */
+function toggleDebugButtonsVisibility() {
+    if (debugModeEnabled) {
+        debugButtonsContainer.style.display = 'grid'; // Use 'grid' for d-grid gap-2
+    } else {
+        debugButtonsContainer.style.display = 'none';
+    }
+}
+
+/**
+ * Simulates a Prayer Announcement. (NEW, used by UI)
+ * @param {string} prayerKey - The key of the prayer to simulate (e.g., 'fajr').
+ */
+function simulatePrayerAnnouncementAction(prayerKey) {
+    if (!debugModeEnabled) {
+        showMessage("Debug Mode Off", "Please enable Debug Mode in settings to use simulation functions.");
+        return;
+    }
+    if (!todayPrayerDataGlobal) {
+        showMessage("Debug Warning", "No prayer data loaded. Please sync prayer times first.");
+        return;
+    }
+    if (!OBLIGATORY_PRAYERS.includes(prayerKey)) {
+        showMessage("Debug Warning", `'${prayerKey}' is not an obligatory prayer for announcements.`);
+        return;
+    }
+
+    // Temporarily reset the announced status for this prayer for testing
+    announcedPrayersToday[prayerKey] = false;
+
+    const prayerTimeStr = todayPrayerDataGlobal[prayerKey];
+    const currentZoneName = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || 'N/A';
+
+    console.log(`Simulating announcement for ${prayerKey}...`);
+    startPrayerAnnouncement(prayerKey, formatTime(prayerTimeStr, false), currentZoneName);
+}
+
+/**
+ * Simulates an Iqama Countdown. (NEW, used by UI)
+ * @param {string} prayerKey - The key of the prayer to simulate (e.g., 'fajr').
+ * @param {number} [durationSeconds=45] - The duration of the simulation in seconds.
+ */
+function simulateIqamaCountdownAction(prayerKey, durationSeconds = 45) {
+    if (!debugModeEnabled) {
+        showMessage("Debug Mode Off", "Please enable Debug Mode in settings to use simulation functions.");
+        return;
+    }
+    if (!todayPrayerDataGlobal) {
+        showMessage("Debug Warning", "No prayer data loaded. Please sync prayer times first.");
+        return;
+    }
+    if (!OBLIGATORY_PRAYERS.includes(prayerKey)) {
+        showMessage("Debug Warning", `'${prayerKey}' is not an obligatory prayer key for Iqama countdown.`);
+        return;
+    }
+    if (isNaN(durationSeconds) || durationSeconds < 1) {
+        showMessage("Invalid Input", "Please enter a valid positive number for Iqama countdown duration.");
+        return;
+    }
+
+
+    // Set activePrayerDetails based on the specified prayerKey
+    const prayerTimeStr = todayPrayerDataGlobal[prayerKey];
+    const currentZoneName = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || 'N/A';
+
+    activePrayerDetails = {
+        nameKey: prayerKey,
+        name: PRAYER_NAMES_MAP[prayerKey],
+        time: formatTime(prayerTimeStr, false),
+        zone: currentZoneName,
+        // The iqamaTime property is primarily for startPrayerAnnouncement to know the *actual* iqama time.
+        // For simulation, startIqamaCountdown uses `simulatedDurationSeconds`.
+        iqamaTime: calculateIqamaTime(todayPrayerDataGlobal[prayerKey], iqamaOffsets[prayerKey])
+    };
+
+    console.log(`Simulating Iqama Countdown for ${prayerKey} for ${durationSeconds} seconds...`);
+    startIqamaCountdown(durationSeconds); // Pass the duration for simulation
+}
+
+/**
+ * Simulates the Post-Iqama Message. (NEW, used by UI)
+ */
+function simulatePostIqamaMessageAction() {
+    if (!debugModeEnabled) {
+        showMessage("Debug Mode Off", "Please enable Debug Mode in settings to use simulation functions.");
+        return;
+    }
+    console.log("Simulating Post-Iqama Message...");
+    startPostIqamaMessage();
+}
+
+/**
+ * Returns the display to the Main Display. (NEW, used by UI)
+ */
+function returnToMainAction() {
+    if (!debugModeEnabled) {
+        showMessage("Debug Mode Off", "Please enable Debug Mode in settings to use simulation functions.");
+        return;
+    }
+    console.log("Returning to Main Display...");
+    returnToMainDisplay();
+}
+
+/**
+ * Resets the announced prayer flags for the current day. (NEW, used by UI)
+ */
+function resetAnnouncedPrayersAction() {
+    if (!debugModeEnabled) {
+        showMessage("Debug Mode Off", "Please enable Debug Mode in settings to use simulation functions.");
+        return;
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    announcedPrayersToday = {
+        date: today,
+        fajr: false,
+        dhuhr: false,
+        asr: false,
+        maghrib: false,
+        isha: false
+    };
+    console.log("Announced prayers for today have been reset.");
+    showMessage("Debug Action", "Announced prayers for today have been reset.<br>You can now re-trigger prayer announcements.");
+}
+
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
+    // Attempt to apply theme from localStorage immediately for quick visual load
+    // This is temporary until IndexedDB is fully loaded.
+    const initialLocalStorageTheme = localStorage.getItem('theme');
+    if (initialLocalStorageTheme) {
+        setTheme(initialLocalStorageTheme);
+    } else {
+        setTheme('dark'); // Default if nothing in localStorage
+    }
+
     // Open IndexedDB first
     await openDatabase();
 
-    // Load all saved settings (theme, time format, iqama offsets, auto sync)
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme === 'light') {
-        setTheme('light');
-    } else {
-        setTheme('dark'); // Default to dark mode or if 'dark' was saved
-    }
-    loadSettings(); // This will load iqamaOffsets, use24HourFormat, and autoSyncSettings
+    // Load all other settings from IndexedDB (this will override initial localStorage theme if different)
+    await loadSettings(); // This will load iqamaOffsets, use24HourFormat, autoSyncSettings, and debugModeEnabled
 
     // Populate locations dropdown and set last selected
-    populateLocationSelect();
+    await populateLocationSelect();
 
     // Populate Iqama input fields with loaded/default offsets
     populateIqamaInputs();
@@ -1317,24 +1608,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkAndRunAutoSync();
 
     // Theme switch listener
-    darkModeSwitch.addEventListener('change', (event) => {
-        setTheme(event.target.checked ? 'dark' : 'light');
+    darkModeSwitch.addEventListener('change', async (event) => {
+        const newTheme = event.target.checked ? 'dark' : 'light';
+        setTheme(newTheme);
+        await saveAllSettings(); // Save all settings, including the new theme
     });
 
     // Time format switch listener
-    timeFormatSwitch.addEventListener('change', (event) => {
+    timeFormatSwitch.addEventListener('change', async (event) => {
         use24HourFormat = event.target.checked;
-        saveSettings(); // Save all settings
+        await saveAllSettings(); // Save all settings
         // Re-display prayer times to update all time formats
         displayPrayerTimes(locationSelect.value, new Date().getFullYear());
-        // No need to call updateClockAndPrayerStatus() separately,
-        // displayPrayerTimes already calls it internally.
     });
 
     // Add change listener for location select (inside Offcanvas)
     locationSelect.addEventListener('change', async (event) => {
         const selectedLocation = event.target.value;
-        localStorage.setItem('lastSelectedLocation', selectedLocation); // Save selected location
+        await saveAllSettings(); // Save selected location
         const currentYear = new Date().getFullYear();
         await displayPrayerTimes(selectedLocation, currentYear);
     });
@@ -1353,10 +1644,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     iqamaIshaInput.addEventListener('input', handleIqamaInputChange);
 
     // Auto Sync Master Switch Listener (NEW)
-    autoSyncMasterSwitch.addEventListener('change', (event) => {
+    autoSyncMasterSwitch.addEventListener('change', async (event) => {
         autoSyncSettings.enabled = event.target.checked;
         toggleAutoSyncScheduleOptions(); // Show/hide details based on master switch
-        saveSettings();
+        await saveAllSettings();
         // If enabled, immediately check if a sync is due
         if (autoSyncSettings.enabled) {
             checkAndRunAutoSync();
@@ -1365,22 +1656,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Auto Sync Radio and Select listeners (NEW)
     autoSyncFrequencyRadios.forEach(radio => {
-        radio.addEventListener('change', (event) => {
+        radio.addEventListener('change', async (event) => {
             autoSyncSettings.frequency = event.target.value;
-            saveSettings();
+            await saveAllSettings();
         });
     });
-    autoSyncDaySelect.addEventListener('change', (event) => {
+    autoSyncDaySelect.addEventListener('change', async (event) => {
         autoSyncSettings.day = parseInt(event.target.value, 10);
-        saveSettings();
+        await saveAllSettings();
     });
-    autoSyncTimeInput.addEventListener('change', (event) => {
+    autoSyncTimeInput.addEventListener('change', async (event) => {
         autoSyncSettings.time = event.target.value;
-        saveSettings();
+        await saveAllSettings();
     });
 
     // Event listener for showing Sync History modal (NEW)
     document.getElementById('syncHistoryModal').addEventListener('show.bs.modal', displaySyncHistory);
+
+
+    // Debug Mode Switch Listener (NEW)
+    debugModeSwitch.addEventListener('change', async (event) => {
+        debugModeEnabled = event.target.checked;
+        await saveAllSettings();
+        toggleDebugButtonsVisibility();
+        // If debug mode is enabled, ensure main display updates its next prayer logic without triggering real announcements
+        updateClockAndPrayerStatus();
+    });
+
+    // Debug Button Listeners (NEW)
+    simPrayerAnnounceBtn.addEventListener('click', () => simulatePrayerAnnouncementAction(simPrayerSelect.value));
+    simIqamaCountdownBtn.addEventListener('click', () => simulateIqamaCountdownAction(simPrayerSelect.value, parseInt(simIqamaDurationInput.value, 10)));
+    simPostIqamaBtn.addEventListener('click', simulatePostIqamaMessageAction);
+    returnToMainBtn.addEventListener('click', returnToMainAction);
+    resetAnnouncedPrayersBtn.addEventListener('click', resetAnnouncedPrayersAction);
 
 
     // Initial setup of display to 'main'

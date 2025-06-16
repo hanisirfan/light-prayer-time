@@ -20,6 +20,8 @@
     --offcanvas-heading-color: #212529; /* Dark text for light mode offcanvas headings */
     --list-group-item-bg: #f8f9fa; /* For list group items in light mode */
     --list-group-item-border: rgba(0, 0, 0, 0.125);
+    --iqama-countdown-danger-color: #dc3545; /* Bootstrap danger red */
+    --iqama-countdown-warning-color: #ffc107; /* Bootstrap warning orange */
 }
 
 body.dark-mode {
@@ -42,6 +44,8 @@ body.dark-mode {
     --offcanvas-heading-color: #e9ecef; /* Light text for dark mode offcanvas headings */
     --list-group-item-bg: #495057; /* For list group items in dark mode */
     --list-group-item-border: rgba(255, 255, 255, 0.125);
+    --iqama-countdown-danger-color: #fd7e14; /* Orange-red for dark mode danger */
+    --iqama-countdown-warning-color: #ffda6a; /* Lighter orange for dark mode warning */
 }
 
 body {
@@ -198,9 +202,19 @@ body {
     color: var(--muted-text-color) !important;
 }
 
+/* Specific text colors for countdowns */
 .text-success {
-    color: var(--next-prayer-countdown-color) !important;
+    color: var(--next-prayer-countdown-color) !important; /* For next prayer countdown (green) */
 }
+
+.text-danger-custom { /* Custom class for the Iqama countdown red */
+    color: var(--iqama-countdown-danger-color) !important;
+}
+
+.text-warning-custom { /* Custom class for the Iqama countdown orange */
+    color: var(--iqama-countdown-warning-color) !important;
+}
+
 
 .form-select, .btn {
     border-radius: 0.5rem; /* Keep rounded buttons/selects */
@@ -243,6 +257,28 @@ body {
     --bs-btn-disabled-border-color: var(--heading-color);
     transition: all 0.3s ease;
 }
+
+.btn-warning { /* For debug buttons */
+    --bs-btn-bg: #ffc107;
+    --bs-btn-border-color: #ffc107;
+    --bs-btn-hover-bg: #e0a800;
+    --bs-btn-hover-border-color: #d39e00;
+    --bs-btn-active-bg: #c69500;
+    --bs-btn-active-border-color: #b98b00;
+    color: #212529; /* Ensure text is dark on yellow */
+    transition: all 0.3s ease;
+}
+
+body.dark-mode .btn-warning {
+    --bs-btn-bg: #ffc107;
+    --bs-btn-border-color: #ffc107;
+    --bs-btn-hover-bg: #e0a800;
+    --bs-btn-hover-border-color: #d39e00;
+    --bs-btn-active-bg: #c69500;
+    --bs-btn-active-border-color: #b98b00;
+    color: #212529;
+}
+
 
 .offcanvas {
     background-color: var(--offcanvas-bg); /* Use new variable for offcanvas */
