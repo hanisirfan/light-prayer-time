@@ -73,20 +73,36 @@ const JAKIM_ZONES = [
     { code: 'WLY02', name: 'Wilayah Persekutuan: Labuan' }
 ];
 
-// DOM Elements
-const body = document.body; // FIX: Define 'body' reference
+// Global Maps and Constants
+const PRAYER_NAMES_MAP = {
+    'imsak': 'Imsak', 'fajr': 'Fajr', 'syuruk': 'Syuruk', 'dhuha': 'Dhuha',
+    'dhuhr': 'Dhuhr', 'asr': 'Asr', 'maghrib': 'Maghrib', 'isha': 'Isha'
+};
+
+const API_MONTH_MAP = {
+    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+    'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+};
+
+// The 5 obligatory prayers that trigger announcements
+const OBLIGATORY_PRAYERS = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+
+// DOM Elements (Centralized)
+const body = document.body; // Correctly reference the body element
 const locationSelect = document.getElementById('locationSelect');
 const syncButton = document.getElementById('syncButton');
 const prayerTimesTableBody = document.getElementById('prayerTimesTableBody');
-const prayerTimesTable = document.getElementById('prayerTimesTable'); // Get the table element
-const iqamaTimesTableBody = document.getElementById('iqamaTimesTableBody'); // Get the iqama table footer
+const prayerTimesTable = document.getElementById('prayerTimesTable');
+const iqamaTimesTableBody = document.getElementById('iqamaTimesTableBody');
 const messageModal = new bootstrap.Modal(document.getElementById('messageModal'));
 const modalMessageContent = document.getElementById('modalMessageContent');
 const syncButtonSpinner = syncButton.querySelector('.spinner-border');
-const syncHistoryModal = new bootstrap.Modal(document.getElementById('syncHistoryModal')); // NEW
-const syncHistoryList = document.getElementById('syncHistoryList'); // NEW
+const syncHistoryModal = new bootstrap.Modal(document.getElementById('syncHistoryModal'));
+const syncHistoryList = document.getElementById('syncHistoryList');
 
-// Main display elements
+// Main Display Elements
+const mainDisplayContent = document.getElementById('mainDisplayContent');
 const currentTimeDisplay = document.getElementById('currentTime');
 const currentMiladiDateDisplay = document.getElementById('currentMiladiDate');
 const currentHijriDateDisplay = document.getElementById('currentHijriDate');
@@ -97,6 +113,22 @@ const countdownToNextPrayerDisplay = document.getElementById('countdownToNextPra
 const darkModeSwitch = document.getElementById('darkModeSwitch');
 const timeFormatSwitch = document.getElementById('timeFormatSwitch');
 
+// Prayer Announcement Display Elements
+const prayerAnnouncementDisplay = document.getElementById('prayerAnnouncementDisplay');
+const announcementPrayerName = document.getElementById('announcementPrayerName');
+const announcementPrayerTime = document.getElementById('announcementPrayerTime');
+const announcementZoneName = document.getElementById('announcementZoneName');
+
+// Iqama Countdown Display Elements
+const iqamaCountdownDisplay = document.getElementById('iqamaCountdownDisplay');
+const iqamaPrayerName = document.getElementById('iqamaPrayerName');
+const iqamaPrayerTime = document.getElementById('iqamaPrayerTime');
+const iqamaCountdown = document.getElementById('iqamaCountdown');
+const iqamaZoneName = document.getElementById('iqamaZoneName');
+
+// Post-Iqama Message Display Elements
+const postIqamaMessageDisplay = document.getElementById('postIqamaMessageDisplay');
+
 // Iqama input fields
 const iqamaFajrInput = document.getElementById('iqamaFajr');
 const iqamaDhuhrInput = document.getElementById('iqamaDhuhr');
@@ -104,23 +136,25 @@ const iqamaAsrInput = document.getElementById('iqamaAsr');
 const iqamaMaghribInput = document.getElementById('iqamaMaghrib');
 const iqamaIshaInput = document.getElementById('iqamaIsha');
 
-// Auto Sync Elements (NEW)
+// Auto Sync Elements
 const autoSyncMasterSwitch = document.getElementById('autoSyncMasterSwitch');
 const autoSyncScheduleDetails = document.getElementById('autoSyncScheduleDetails');
 const autoSyncFrequencyRadios = document.querySelectorAll('input[name="autoSyncFrequency"]');
 const autoSyncDaySelect = document.getElementById('autoSyncDay');
 const autoSyncTimeInput = document.getElementById('autoSyncTime');
 
+
 let db; // IndexedDB instance
 let todayPrayerDataGlobal = null; // Store today's prayer data globally for clock updates
-let nextPrayerTimeout; // To clear previous countdown timeouts
+let nextPrayerTimeout; // To clear previous countdown timeouts for main display
+let iqamaCountdownInterval; // To clear iqama countdown interval
 
 // Default Iqama offsets in minutes (All now 10 by default)
 let iqamaOffsets = {
     fajr: 10,
     dhuhr: 10,
     asr: 10,
-    maghrib: 10, // Changed from 5 to 10
+    maghrib: 10,
     isha: 10
 };
 
@@ -129,12 +163,26 @@ let use24HourFormat = true; // Default to 24-hour
 
 // Auto sync settings
 let autoSyncSettings = {
-    enabled: false, // NEW: Master switch for auto sync
+    enabled: false, // Master switch for auto sync (default to OFF)
     frequency: 'weekly', // 'weekly', 'bi-weekly', 'monthly'
     day: 0, // Day of week (0-6, Sunday-Saturday)
     time: '03:00', // HH:MM
     lastAutoSync: null // Timestamp of last successful auto sync
 };
+
+// Display State Management (NEW)
+let currentDisplayState = 'main'; // 'main', 'announcement', 'iqamaCountdown', 'postIqamaMessage'
+// To prevent repeated announcements on the same day
+let announcedPrayersToday = {
+    date: null, // YYYY-MM-DD
+    fajr: false,
+    dhuhr: false,
+    asr: false,
+    maghrib: false,
+    isha: false
+};
+let activePrayerDetails = null; // Stores details for the prayer currently in announcement/iqama phase
+
 
 /**
  * Helper function to format a time string (HH:MM:SS or HH:MM) to the user's preferred format.
@@ -166,7 +214,7 @@ function formatTime(timeStr, includeSeconds = false) {
         let s = String(date.getSeconds()).padStart(2, '0');
         return includeSeconds ? `${h}:${m}:${s}` : `${h}:${m}`;
     }
-    
+
     // Otherwise, use browser's locale-sensitive formatting for 12-hour
     return date.toLocaleTimeString([], options);
 }
@@ -206,14 +254,14 @@ function setTheme(mode) {
     if (mode === 'dark') {
         body.classList.add('dark-mode');
         // Add table-dark class only if it's not already there and we are in dark mode
-        if (prayerTimesTable && !prayerTimesTable.classList.contains('table-dark')) { // Added null check for prayerTimesTable
+        if (prayerTimesTable && !prayerTimesTable.classList.contains('table-dark')) {
             prayerTimesTable.classList.add('table-dark');
         }
         localStorage.setItem('theme', 'dark');
         darkModeSwitch.checked = true;
     } else {
         body.classList.remove('dark-mode');
-        if (prayerTimesTable) { // Added null check for prayerTimesTable
+        if (prayerTimesTable) {
             prayerTimesTable.classList.remove('table-dark'); // Always remove in light mode
         }
         localStorage.setItem('theme', 'light');
@@ -402,7 +450,7 @@ async function cleanupSyncHistory() {
         if (allRecords.length > 10) {
             // Sort by syncTime in ascending order (oldest first)
             allRecords.sort((a, b) => new Date(a.syncTime).getTime() - new Date(b.syncTime).getTime());
-            
+
             // Delete oldest records until only 10 remain
             for (let i = 0; i < allRecords.length - 10; i++) {
                 // Delete by id (keyPath)
@@ -430,7 +478,6 @@ async function cleanupSyncHistory() {
  */
 async function fetchPrayerTimesForMonth(zone, year, month) {
     const url = `${API_BASE_URL}&zone=${zone}&period=month&year=${year}&month=${month}`;
-    let failedMonths = []; // Define failedMonths here
     try {
         console.log(`API URL: ${url}`); // Debugging API URL
         const response = await fetch(url);
@@ -463,7 +510,6 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
     showLoading(true);
     const currentYear = new Date().getFullYear();
     let allPrayerTimes = [];
-    let fetchSuccessful = true; // Flag to track if API calls were successful for the year
     let failedMonths = []; // Define failedMonths here
 
     // Clear existing data for the selected location and year before syncing
@@ -498,18 +544,15 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
             allPrayerTimes.sort((a, b) => {
                 const parseDate = (dateStr) => {
                     const parts = dateStr.split('-'); // e.g., "01-Jan-2025"
-                    const monthMap = {
-                        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
-                        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
-                    };
-                    return new Date(parts[2], monthMap[parts[1]], parts[0]);
+                    const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
+                    return new Date(parts[2], parseInt(monthNum, 10) - 1, parts[0]); // Month is 0-indexed in JS Date
                 };
                 return parseDate(a.date) - parseDate(b.date);
             });
 
             await savePrayerTimes(locationCode, currentYear, allPrayerTimes);
             await addSyncRecord(locationCode, syncMethod); // Add record to history (NEW)
-            
+
             // Update lastAutoSync only if it was an auto sync
             if (syncMethod === 'AUTO') {
                 autoSyncSettings.lastAutoSync = Date.now();
@@ -523,12 +566,11 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
             showMessage('Sync Complete', message);
             displayPrayerTimes(locationCode, currentYear); // Re-display after sync
         } else {
-            fetchSuccessful = false; // Mark as not successful if no data was retrieved at all
+            // Mark as not successful if no data was retrieved at all
             showMessage('Sync Failed', 'Could not fetch any prayer times for the selected location and year. The API might not have data available for the current year yet, or there was an issue with the fetch. Please try again later.');
         }
 
     } catch (error) {
-        fetchSuccessful = false;
         console.error('Error during full year sync:', error);
         showMessage('Error', `An error occurred during synchronization: ${error.message}. Please check your internet connection and try again.`);
     } finally {
@@ -591,7 +633,7 @@ function formatHijriDate(hijriDateStr) {
         'Muharram', 'Safar', 'Rabi\' al-Awwal', 'Rabi\' al-Thani', 'Jumada al-Ula', 'Jumada al-Thani',
         'Rajab', 'Sha\'ban', 'Ramadan', 'Shawwal', 'Dhul-Qa\'dah', 'Dhul-Hijjah'
     ];
-    
+
     // Adjust monthNum to be 0-indexed for array lookup
     const monthName = hijriMonthNames[monthNum - 1] || '';
 
@@ -628,10 +670,13 @@ function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
 async function displayPrayerTimes(locationCode, year) {
     prayerTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Loading today\'s prayer times...</td></tr>';
     iqamaTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center">Loading Iqama times...</td></tr>';
-    
+
     // Clear previous countdown if any
     if (nextPrayerTimeout) {
         clearTimeout(nextPrayerTimeout);
+    }
+    if (iqamaCountdownInterval) { // Clear Iqama interval if active
+        clearInterval(iqamaCountdownInterval);
     }
 
     const data = await getPrayerTimesForYear(locationCode, year);
@@ -642,15 +687,34 @@ async function displayPrayerTimes(locationCode, year) {
     const today = new Date();
     const todayFormattedForComparison = today.toISOString().slice(0, 10); //YYYY-MM-DD
 
+    // Reset announced prayers for a new day
+    if (announcedPrayersToday.date !== todayFormattedForComparison) {
+        announcedPrayersToday = {
+            date: todayFormattedForComparison,
+            fajr: false,
+            dhuhr: false,
+            asr: false,
+            maghrib: false,
+            isha: false
+        };
+        // Reset lastAutoSync if it's a new day and auto sync is off (to re-trigger if needed)
+        // This makes sure if auto sync was off, and is then turned on, it tries to sync for the new day
+        if (!autoSyncSettings.enabled && autoSyncSettings.lastAutoSync) {
+            const lastSyncDate = new Date(autoSyncSettings.lastAutoSync).toISOString().slice(0,10);
+            if (lastSyncDate !== todayFormattedForComparison) {
+                autoSyncSettings.lastAutoSync = null; // Forces a check next time auto sync is enabled/app loads
+                saveSettings();
+            }
+        }
+    }
+
+
     let todayData = null;
     if (data && data.length > 0) {
         todayData = data.find(dayData => {
             const parts = dayData.date.split('-'); // e.g., "01-Jan-2025"
-            const monthMap = {
-                'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
-                'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-            };
-            const apiDateFormatted = `${parts[2]}-${monthMap[parts[1]]}-${parts[0]}`; // Convert to YYYY-MM-DD
+            const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
+            const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`; // Convert to YYYY-MM-DD
             return apiDateFormatted === todayFormattedForComparison;
         });
     }
@@ -707,17 +771,183 @@ async function displayPrayerTimes(locationCode, year) {
         nextPrayerTimeDisplay.textContent = '---';
         countdownToNextPrayerDisplay.textContent = '---';
         todayPrayerDataGlobal = null;
+        currentDisplayState = 'main'; // Ensure we are on main display if no data
+        showDisplay('main');
     }
 }
 
 /**
+ * Hides all dynamic display containers and shows only the specified one.
+ * @param {string} mode - 'main', 'announcement', 'iqamaCountdown', 'postIqamaMessage'
+ */
+function showDisplay(mode) {
+    const displays = document.querySelectorAll('.display-mode-content');
+    displays.forEach(display => {
+        display.classList.remove('active-display');
+    });
+
+    let targetDisplay;
+    switch (mode) {
+        case 'main':
+            targetDisplay = mainDisplayContent;
+            break;
+        case 'announcement':
+            targetDisplay = prayerAnnouncementDisplay;
+            break;
+        case 'iqamaCountdown':
+            targetDisplay = iqamaCountdownDisplay;
+            break;
+        case 'postIqamaMessage':
+            targetDisplay = postIqamaMessageDisplay;
+            break;
+        default:
+            targetDisplay = mainDisplayContent; // Fallback to main
+            mode = 'main';
+    }
+    targetDisplay.classList.add('active-display');
+    currentDisplayState = mode;
+    console.log(`Switched to display: ${mode}`);
+}
+
+/**
+ * Triggers the Prayer Announcement display.
+ * @param {string} prayerNameKey - The key of the prayer (e.g., 'fajr').
+ * @param {string} prayerTimeStr - Formatted prayer time (e.g., "05:30 AM").
+ * @param {string} zoneName - The full zone name.
+ */
+function startPrayerAnnouncement(prayerNameKey, prayerTimeStr, zoneName) {
+    if (currentDisplayState === 'announcement' || currentDisplayState === 'iqamaCountdown' || currentDisplayState === 'postIqamaMessage') {
+        return; // Already in an announcement sequence
+    }
+
+    // Check if this prayer has already been announced today
+    if (announcedPrayersToday[prayerNameKey]) {
+        console.log(`${PRAYER_NAMES_MAP[prayerNameKey]} already announced today.`);
+        return;
+    }
+
+    // Clear any existing timers/intervals before starting new sequence
+    if (nextPrayerTimeout) clearTimeout(nextPrayerTimeout);
+    if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval);
+
+    activePrayerDetails = {
+        nameKey: prayerNameKey,
+        name: PRAYER_NAMES_MAP[prayerNameKey],
+        time: prayerTimeStr,
+        zone: zoneName,
+        iqamaTime: calculateIqamaTime(todayPrayerDataGlobal[prayerNameKey], iqamaOffsets[prayerNameKey])
+    };
+
+    announcementPrayerName.textContent = activePrayerDetails.name.toUpperCase();
+    announcementPrayerTime.textContent = activePrayerDetails.time;
+    announcementZoneName.textContent = activePrayerDetails.zone;
+
+    showDisplay('announcement');
+    announcedPrayersToday[prayerNameKey] = true; // Mark as announced for today
+
+    // After 30 seconds, transition to Iqama Countdown
+    nextPrayerTimeout = setTimeout(() => {
+        startIqamaCountdown();
+    }, 30000); // 30 seconds for announcement
+    console.log(`Prayer Announcement for ${activePrayerDetails.name} started. Next: Iqama Countdown in 30s.`);
+}
+
+/**
+ * Triggers the Iqama Countdown display.
+ */
+function startIqamaCountdown() {
+    if (!activePrayerDetails) {
+        console.error("No active prayer details for Iqama countdown.");
+        returnToMainDisplay();
+        return;
+    }
+
+    iqamaPrayerName.textContent = activePrayerDetails.name.toUpperCase();
+    iqamaPrayerTime.textContent = activePrayerDetails.time;
+    iqamaZoneName.textContent = activePrayerDetails.zone;
+
+    showDisplay('iqamaCountdown');
+
+    const [iqamaHours, iqamaMinutes] = activePrayerDetails.iqamaTime.split(':').map(Number);
+    const iqamaDateTime = new Date();
+    iqamaDateTime.setHours(iqamaHours, iqamaMinutes, 0, 0);
+
+    // Clear any existing countdown interval
+    if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval);
+
+    // Update countdown every second
+    iqamaCountdownInterval = setInterval(() => {
+        const now = new Date();
+        const diffMs = iqamaDateTime.getTime() - now.getTime();
+
+        if (diffMs < 0) {
+            iqamaCountdown.textContent = '00:00:00';
+            clearInterval(iqamaCountdownInterval);
+            console.log(`Iqama for ${activePrayerDetails.name} reached. Transitioning to Post-Iqama Message.`);
+            startPostIqamaMessage();
+        } else {
+            const totalSeconds = Math.floor(diffMs / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            iqamaCountdown.textContent =
+                `${String(hours).padStart(2, '0')}:` +
+                `${String(minutes).padStart(2, '0')}:` +
+                `${String(seconds).padStart(2, '0')}`;
+        }
+    }, 1000); // Update every second
+    console.log(`Iqama Countdown for ${activePrayerDetails.name} started.`);
+}
+
+/**
+ * Triggers the Post-Iqama Message display.
+ */
+function startPostIqamaMessage() {
+    if (nextPrayerTimeout) clearTimeout(nextPrayerTimeout); // Clear any previous general timer
+    if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval); // Ensure Iqama interval is cleared
+
+    showDisplay('postIqamaMessage');
+
+    // After 30 seconds, return to Main Display
+    nextPrayerTimeout = setTimeout(() => {
+        returnToMainDisplay();
+    }, 30000); // 30 seconds for message display
+    console.log(`Post-Iqama message started. Returning to Main Display in 30s.`);
+}
+
+/**
+ * Returns the display to the Main Display.
+ */
+function returnToMainDisplay() {
+    if (nextPrayerTimeout) clearTimeout(nextPrayerTimeout);
+    if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval);
+    activePrayerDetails = null; // Clear active prayer details
+
+    showDisplay('main');
+    // Update main display content immediately
+    updateClockAndPrayerStatus(); // This will also re-establish the main loop timer
+    console.log('Returned to Main Display.');
+}
+
+
+/**
  * Updates the current time, and determines/displays the next prayer time and its countdown.
+ * This function also handles transitions to announcement displays.
  */
 function updateClockAndPrayerStatus() {
     const now = new Date();
-    // Current time display always includes seconds
     currentTimeDisplay.textContent = formatTime(`${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`, true);
 
+    // If currently not on main display, just update current time and maintain sequence
+    if (currentDisplayState !== 'main') {
+        // If in Iqama Countdown, its own interval handles updates
+        // If in Announcement or Post-Iqama, content is static
+        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000);
+        return;
+    }
+
+    // Only proceed with prayer time detection and next prayer calculation if on main display
     if (!todayPrayerDataGlobal) {
         nextPrayerNameDisplay.textContent = 'No Data';
         nextPrayerTimeDisplay.textContent = '---';
@@ -726,40 +956,22 @@ function updateClockAndPrayerStatus() {
         return;
     }
 
-    // Define prayer keys and names for both standard prayers and Iqama
-    const standardPrayerKeys = ['imsak', 'fajr', 'syuruk', 'dhuha', 'dhuhr', 'asr', 'maghrib', 'isha'];
-    const mainPrayerKeysForIqama = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']; // Only these have Iqama
-    const prayerNamesMap = {
-        'imsak': 'Imsak', 'fajr': 'Fajr', 'syuruk': 'Syuruk', 'dhuha': 'Dhuha',
-        'dhuhr': 'Dhuhr', 'asr': 'Asr', 'maghrib': 'Maghrib', 'isha': 'Isha'
-    };
+    const currentZoneName = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || 'N/A';
+
 
     let allEventsForToday = [];
 
-    // Add standard prayer times
+    // Combine all standard prayer times for general next prayer calculation
+    const standardPrayerKeys = ['imsak', 'fajr', 'syuruk', 'dhuha', 'dhuhr', 'asr', 'maghrib', 'isha'];
     for (const key of standardPrayerKeys) {
         const timeStr = todayPrayerDataGlobal[key];
         if (timeStr && timeStr.trim() !== '--:--') {
             const [pHours, pMinutes] = timeStr.split(':').map(Number);
             allEventsForToday.push({
-                name: prayerNamesMap[key],
-                timeStr: formatTime(timeStr, false), // Format to user's preference (HH:MM), no seconds
+                name: PRAYER_NAMES_MAP[key],
+                nameKey: key, // Store key for announcement check
+                timeStr: formatTime(timeStr, false),
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0)
-            });
-        }
-    }
-
-    // Add Iqama times for main prayers
-    for (const key of mainPrayerKeysForIqama) {
-        const prayerTimeStr = todayPrayerDataGlobal[key];
-        const offset = iqamaOffsets[key];
-        if (prayerTimeStr && prayerTimeStr.trim() !== '--:--' && offset !== undefined) {
-            const iqamaTimeStrRaw = calculateIqamaTime(prayerTimeStr, offset); // This returns HH:MM string from previous logic
-            const [iHours, iMinutes] = iqamaTimeStrRaw.split(':').map(Number);
-            allEventsForToday.push({
-                name: `Iqama ${prayerNamesMap[key]}`, // Name for Iqama
-                timeStr: formatTime(iqamaTimeStrRaw, false), // Format to user's preference (HH:MM), no seconds
-                dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), iHours, iMinutes, 0)
             });
         }
     }
@@ -767,24 +979,35 @@ function updateClockAndPrayerStatus() {
     // Sort all events chronologically
     allEventsForToday.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 
-    let nextEventFound = false;
-    let nextEventName = '';
-    let nextEventTime = '';
-    let nextEventDateTime = null;
+    let nextEventForMainDisplay = null;
 
-    // Find the next upcoming event (prayer or iqama) from today's events
+    // Check for *Prayer Announcement* trigger for obligatory prayers
+    for (const key of OBLIGATORY_PRAYERS) {
+        const prayerTimeStr = todayPrayerDataGlobal[key];
+        if (prayerTimeStr && prayerTimeStr.trim() !== '--:--') {
+            const [pHours, pMinutes] = prayerTimeStr.split(':').map(Number);
+            const prayerDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0, 0);
+
+            // Allow a small window (e.g., first 59 seconds) to trigger the announcement
+            const announcementWindowEnd = new Date(prayerDateTime.getTime() + 59 * 1000); // 59 seconds after prayer time
+
+            if (now >= prayerDateTime && now < announcementWindowEnd && !announcedPrayersToday[key]) {
+                startPrayerAnnouncement(key, formatTime(prayerTimeStr, false), currentZoneName);
+                return; // Exit and let the announcement sequence manage the timers
+            }
+        }
+    }
+
+    // If no announcement triggered, find the next prayer for the Main Display
     for (const event of allEventsForToday) {
         if (event.dateTime > now) {
-            nextEventName = event.name;
-            nextEventTime = event.timeStr;
-            nextEventDateTime = event.dateTime;
-            nextEventFound = true;
+            nextEventForMainDisplay = event;
             break;
         }
     }
 
-    // If no event found for today (all passed), check Fajr for tomorrow
-    if (!nextEventFound) {
+    // If no event found for today, find Fajr for tomorrow
+    if (!nextEventForMainDisplay) {
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
         const tomorrowFormattedForComparison = tomorrow.toISOString().slice(0, 10);
@@ -794,68 +1017,61 @@ function updateClockAndPrayerStatus() {
             if (tomorrowDataAll && tomorrowDataAll.length > 0) {
                  tomorrowFajrData = tomorrowDataAll.find(d => {
                     const parts = d.date.split('-');
-                    const monthMap = {
-                        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
-                        'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-                    };
-                    const apiDateFormatted = `${parts[2]}-${monthMap[parts[1]]}-${parts[0]}`;
+                    const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
+                    const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
                     return apiDateFormatted === tomorrowFormattedForComparison;
                 });
             }
 
             if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr.trim() !== '--:--') {
                 const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
-                nextEventName = 'Fajr (Tomorrow)';
-                nextEventTime = formatTime(tomorrowFajrData.fajr, false); // Format to user's preference (HH:MM), no seconds
-                nextEventDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
-                updateNextPrayerDisplay(nextEventName, nextEventTime, nextEventDateTime, now);
+                const tomorrowFajrDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
+
+                nextPrayerNameDisplay.textContent = `Next: Fajr (Tomorrow)`;
+                nextPrayerTimeDisplay.textContent = formatTime(tomorrowFajrData.fajr, false);
+                const diffMsTomorrow = tomorrowFajrDateTime.getTime() - now.getTime();
+                const totalSecondsTomorrow = Math.floor(diffMsTomorrow / 1000);
+                countdownToNextPrayerDisplay.textContent = formatCountdown(totalSecondsTomorrow);
             } else {
                 nextPrayerNameDisplay.textContent = 'No Next Prayer Data';
                 nextPrayerTimeDisplay.textContent = '---';
                 countdownToNextPrayerDisplay.textContent = '---';
             }
-            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000);
+            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
         }).catch(error => {
             console.error("Error fetching tomorrow's data:", error);
             nextPrayerNameDisplay.textContent = 'Error Loading Next Prayer';
             nextPrayerTimeDisplay.textContent = '---';
             countdownToNextPrayerDisplay.textContent = '---';
-            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000);
+            nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
         });
     } else {
-        updateNextPrayerDisplay(nextEventName, nextEventTime, nextEventDateTime, now);
-        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000);
+        // Update main display with next upcoming prayer
+        nextPrayerNameDisplay.textContent = `Next: ${nextEventForMainDisplay.name}`;
+        nextPrayerTimeDisplay.textContent = nextEventForMainDisplay.timeStr;
+
+        const diffMs = nextEventForMainDisplay.dateTime.getTime() - now.getTime();
+        const totalSeconds = Math.floor(diffMs / 1000);
+        countdownToNextPrayerDisplay.textContent = formatCountdown(totalSeconds);
+        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 1000); // Schedule next update
     }
 }
 
 /**
- * Updates the display for the next prayer time and countdown.
- * @param {string} name
- * @param {string} time
- * @param {Date} dateTimeObj
- * @param {Date} currentTimeObj
+ * Formats seconds into HH:MM:SS countdown string.
+ * @param {number} totalSeconds
+ * @returns {string}
  */
-function updateNextPrayerDisplay(name, time, dateTimeObj, currentTimeObj) {
-    nextPrayerNameDisplay.textContent = `Next: ${name}`;
-    nextPrayerTimeDisplay.textContent = time; // This 'time' is already formatted HH:MM
-
-    const diffMs = dateTimeObj.getTime() - currentTimeObj.getTime();
-    if (diffMs < 0) {
-        countdownToNextPrayerDisplay.textContent = 'Passed';
-        clearTimeout(nextPrayerTimeout);
-        nextPrayerTimeout = setTimeout(updateClockAndPrayerStatus, 100);
-    } else {
-        const totalSeconds = Math.floor(diffMs / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-
-        countdownToNextPrayerDisplay.textContent =
-            `${hours.toString().padStart(2, '0')}:` +
-            `${minutes.toString().padStart(2, '0')}:` +
-            `${seconds.toString().padStart(2, '0')}`;
-    }
+function formatCountdown(totalSeconds) {
+    if (totalSeconds < 0) return 'Passed';
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, '0')}:` +
+           `${String(minutes).padStart(2, '0')}:` +
+           `${String(seconds).padStart(2, '0')}`;
 }
+
 
 /**
  * Loads settings (Iqama offsets, time format, auto sync) from localStorage.
@@ -869,7 +1085,7 @@ function loadSettings() {
                 // Merge loaded offsets with defaults, ensuring new defaults are applied if not in saved.
                 Object.assign(iqamaOffsets, parsedSettings.iqamaOffsets);
             }
-            
+
             // Load time format preference, default to true (24H) if not set
             use24HourFormat = parsedSettings.use24HourFormat !== undefined ? parsedSettings.use24HourFormat : true;
             timeFormatSwitch.checked = use24HourFormat; // Update the UI switch
@@ -901,15 +1117,16 @@ function loadSettings() {
                 lastAutoSync: null
             });
             autoSyncMasterSwitch.checked = autoSyncSettings.enabled;
-            document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`).checked = true;
-            autoSyncDaySelect.value = autoSyncSettings.day;
-            autoSyncTimeInput.value = autoSyncSettings.time;
+            // The default radio will be checked by HTML, ensure it's the correct one
+            document.querySelector(`input[name="autoSyncFrequency"][value="weekly"]`).checked = true;
+            autoSyncDaySelect.value = 0; // Sunday
+            autoSyncTimeInput.value = '03:00';
             toggleAutoSyncScheduleOptions();
         }
     } else {
         // If no settings saved, ensure switches/inputs match the default values
         timeFormatSwitch.checked = use24HourFormat;
-        autoSyncMasterSwitch.checked = autoSyncSettings.enabled;
+        autoSyncMasterSwitch.checked = autoSyncSettings.enabled; // Should be false by default
         document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`).checked = true;
         autoSyncDaySelect.value = autoSyncSettings.day;
         autoSyncTimeInput.value = autoSyncSettings.time;
@@ -986,66 +1203,87 @@ async function checkAndRunAutoSync() {
     }
 
     const [scheduledHours, scheduledMinutes] = autoSyncSettings.time.split(':').map(Number);
-    let targetSyncDateTime;
+    let targetSyncDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
 
-    if (!lastSyncTime) {
-        // If never synced before, schedule for the next occurrence of the chosen day/time
-        targetSyncDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
-        if (targetSyncDateTime < now) { // If today's scheduled time passed
-            targetSyncDateTime.setDate(targetSyncDateTime.getDate() + 1); // Move to tomorrow
-        }
-        // Then adjust for selected day of week if needed
-        if (autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') {
-             targetSyncDateTime.setDate(targetSyncDateTime.getDate() + (autoSyncSettings.day - targetSyncDateTime.getDay() + 7) % 7);
-        } else if (autoSyncSettings.frequency === 'monthly') {
-            // For monthly, if no last sync, schedule for first chosen day of week next month
-            // or this month if day/time allows.
-            // Simplified: if current month's scheduled time passed, move to next month.
-            while (targetSyncDateTime < now) {
-                targetSyncDateTime.setMonth(targetSyncDateTime.getMonth() + 1);
-            }
-        }
-        syncDue = true; // Since no lastSyncTime, and auto sync is enabled, it's due
-        console.log('First auto sync: scheduling for', targetSyncDateTime.toLocaleString());
-    } else {
-        // Calculate next scheduled sync time based on lastSyncTime and frequency
-        targetSyncDateTime = new Date(lastSyncTime);
-        targetSyncDateTime.setHours(scheduledHours, scheduledMinutes, 0, 0); // Set to scheduled time
+    // If current time is *before* the scheduled time for today,
+    // and no last sync exists, or last sync was before today,
+    // then the targetSyncDateTime is still today's scheduled time.
+    // If last sync exists and happened today after scheduled time, then we need to calculate next week/month.
 
-        if (autoSyncSettings.frequency === 'weekly') {
-            targetSyncDateTime.setDate(targetSyncDateTime.getDate() + (7 - targetSyncDateTime.getDay() + autoSyncSettings.day) % 7);
-            // If the calculated date is still before or on the last sync, add another week
-            if (targetSyncDateTime.getTime() <= lastSyncTime.getTime()) {
-                targetSyncDateTime.setDate(targetSyncDateTime.getDate() + 7);
-            }
-        } else if (autoSyncSettings.frequency === 'bi-weekly') {
-            // First align to the correct day of the week if needed
-            targetSyncDateTime.setDate(targetSyncDateTime.getDate() + (autoSyncSettings.day - targetSyncDateTime.getDay() + 7) % 7);
-            // Then, ensure it's at least 2 weeks from last sync and in the future
-            while (targetSyncDateTime.getTime() <= lastSyncTime.getTime() || (targetSyncDateTime.getTime() - lastSyncTime.getTime() < (14 * 24 * 60 * 60 * 1000))) {
-                targetSyncDateTime.setDate(targetSyncDateTime.getDate() + 14);
-            }
-        } else if (autoSyncSettings.frequency === 'monthly') {
-            targetSyncDateTime.setMonth(targetSyncDateTime.getMonth() + 1); // Advance by one month from last sync
-            // Ensure the day of the week is correct if monthly still respects day of week
-            // (current logic uses lastSyncTime + X months, then sets time, not specific day-of-month).
-            // If current month's scheduled day has passed, jump to next month.
-            while (targetSyncDateTime.getTime() <= lastSyncTime.getTime()) {
-                targetSyncDateTime.setMonth(targetSyncDateTime.getMonth() + 1);
-            }
-        }
-        
-        // If current time is past the target sync date, then it's due
-        if (now.getTime() >= targetSyncDateTime.getTime()) {
-            syncDue = true;
+    // Calculate next scheduled sync time from NOW, considering the frequency
+    let nextPossibleSync = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
+
+    // If today's scheduled time already passed, move to tomorrow for base calculation
+    if (nextPossibleSync < now) {
+        nextPossibleSync.setDate(nextPossibleSync.getDate() + 1);
+    }
+
+    // Adjust to the specific day of the week for weekly/bi-weekly
+    if (autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') {
+        const daysToAdd = (autoSyncSettings.day - nextPossibleSync.getDay() + 7) % 7;
+        nextPossibleSync.setDate(nextPossibleSync.getDate() + daysToAdd);
+    } else if (autoSyncSettings.frequency === 'monthly') {
+        // For monthly, if last sync was recent, we skip this month.
+        // We calculate next possible sync by advancing months until it's in the future from now.
+        while (nextPossibleSync < now) {
+            nextPossibleSync.setMonth(nextPossibleSync.getMonth() + 1);
         }
     }
+
+    // Now, `nextPossibleSync` holds the first occurrence of the scheduled day/time in the future.
+
+    if (!lastSyncTime) {
+        // If never synced before and auto sync is enabled, it's always due (trigger at first nextPossibleSync)
+        syncDue = true;
+    } else {
+        // Determine the required interval based on frequency
+        let intervalMs = 0;
+        if (autoSyncSettings.frequency === 'weekly') {
+            intervalMs = 7 * 24 * 60 * 60 * 1000;
+        } else if (autoSyncSettings.frequency === 'bi-weekly') {
+            intervalMs = 14 * 24 * 60 * 60 * 1000;
+        } else if (autoSyncSettings.frequency === 'monthly') {
+            // For monthly, compare month difference
+            const lastSyncMonth = lastSyncTime.getMonth();
+            const lastSyncYear = lastSyncTime.getFullYear();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+
+            // If a full month or more has passed since last sync
+            if ((currentYear * 12 + currentMonth) > (lastSyncYear * 12 + lastSyncMonth)) {
+                // Now check if current time passed the scheduled time for the month that should trigger sync
+                const lastSyncScheduledDateTime = new Date(lastSyncTime.getFullYear(), lastSyncTime.getMonth(), lastSyncTime.getDate(), scheduledHours, scheduledMinutes, 0, 0);
+
+                let nextExpectedMonthlySync = new Date(lastSyncTime);
+                nextExpectedMonthlySync.setMonth(nextExpectedMonthlySync.getMonth() + 1);
+                nextExpectedMonthlySync.setHours(scheduledHours, scheduledMinutes, 0, 0);
+
+                while (nextExpectedMonthlySync < now) {
+                    nextExpectedMonthlySync.setMonth(nextExpectedMonthlySync.getMonth() + 1);
+                }
+
+                if (now >= nextExpectedMonthlySync) {
+                    syncDue = true;
+                }
+            } else {
+                syncDue = false; // Still within the same month as last sync or earlier
+            }
+        }
+
+        // For weekly/bi-weekly, check if the interval has passed
+        if ((autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') && intervalMs > 0) {
+            if (now.getTime() - lastSyncTime.getTime() >= intervalMs && now.getTime() >= nextPossibleSync.getTime()) {
+                syncDue = true;
+            }
+        }
+    }
+
 
     if (syncDue) {
         console.log('Auto sync is due. Initiating...');
         await fetchAndStoreAllPrayerTimes(locationSelect.value, 'AUTO');
     } else {
-        console.log('Auto sync not due yet. Next scheduled check:', targetSyncDateTime.toLocaleString());
+        console.log('Auto sync not due yet. Next possible sync check:', nextPossibleSync.toLocaleString());
     }
 }
 
@@ -1145,6 +1383,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('syncHistoryModal').addEventListener('show.bs.modal', displaySyncHistory);
 
 
-    // Start clock and prayer status updates (this will also trigger the initial countdown display)
-    // Removed duplicate call to updateClockAndPrayerStatus() here, as displayPrayerTimes() already calls it.
+    // Initial setup of display to 'main'
+    showDisplay('main');
+    // The main clock update loop will be started by displayPrayerTimes() after initial data fetch.
 });

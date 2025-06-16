@@ -88,7 +88,73 @@ body {
     align-items: center; /* Center content horizontally within the section */
     min-height: 75vh; /* Adjusted minimum height to 75% of viewport height */
     flex-grow: 1; /* Allow to grow more if content demands it, but min-height is dominant */
+    position: relative; /* For absolute positioning of sub-displays */
 }
+
+/* Base style for all display mode content divs */
+.display-mode-content {
+    width: 100%;
+    height: 100%; /* Take full height of parent display-section */
+    display: none; /* Hidden by default, JS will toggle active-display */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: absolute; /* Position relative to display-section */
+    top: 0;
+    left: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out; /* Smooth transition */
+}
+
+.display-mode-content.active-display {
+    display: flex; /* Use flex for centering content */
+    opacity: 1;
+}
+
+/* Specific styling for new display content */
+#prayerAnnouncementDisplay p,
+#iqamaCountdownDisplay p,
+#postIqamaMessageDisplay p {
+    margin-bottom: 0.5rem; /* Default margin for text elements */
+}
+
+#prayerAnnouncementDisplay .display-3 {
+    font-size: 3.5rem; /* PRAYER_NAME */
+}
+#prayerAnnouncementDisplay .h1 {
+    font-size: 2.2rem; /* "Now it is time for prayer:" */
+}
+#prayerAnnouncementDisplay .h2 {
+    font-size: 1.8rem; /* PRAYER_TIME */
+}
+#prayerAnnouncementDisplay .h3 {
+    font-size: 1.5rem; /* ZONE_NAME */
+}
+
+#iqamaCountdownDisplay .display-1 {
+    font-size: 5.5rem; /* COUNTDOWN_TO_IQAMA - Biggest and bold */
+}
+#iqamaCountdownDisplay .h2 {
+    font-size: 2rem; /* PRAYER_NAME */
+}
+#iqamaCountdownDisplay .h3 {
+    font-size: 1.5rem; /* PRAYER_TIME */
+}
+#iqamaCountdownDisplay .h4 {
+    font-size: 1.2rem; /* ZONE_NAME */
+}
+
+#postIqamaMessageDisplay .display-4 {
+    font-size: 2.5rem; /* "Straighten your rows..." */
+}
+#postIqamaMessageDisplay .h1 {
+    font-size: 2.2rem; /* "Please silent your phone..." */
+}
+#postIqamaMessageDisplay .h5 {
+    font-size: 1.2rem; /* Sahih Muslim reference */
+    font-style: italic;
+}
+
 
 /* New Prayer Table Section styling */
 .prayer-table-section {

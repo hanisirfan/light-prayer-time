@@ -9,7 +9,6 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Light Prayer Times">
-    <!-- Updated to .png and image/png mime type, referencing the new logo path -->
     <link rel="apple-touch-icon" href="images/logo/logo-192x192.png">
     <link rel="icon" type="image/png" sizes="192x192" href="images/logo/logo-192x192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="images/logo/logo-512x512.png">
@@ -38,23 +37,50 @@
 
     <!-- Display Section (Top full-width section) -->
     <div class="display-section text-center">
-        <!-- Miladi Date | Hijri Date -->
-        <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-2 mb-2">
-            <p class="h5 mb-0 text-muted" id="currentMiladiDate">Loading Miladi Date...</p>
-            <span class="d-none d-md-block text-muted">|</span> <!-- Separator for desktop -->
-            <p class="h5 mb-0 text-muted" id="currentHijriDate">Loading Hijri Date...</p>
-        </div>
-        <!-- Current Time -->
-        <p class="display-5 fw-bold mb-3" id="currentTime">--:--:--</p>
-        <!-- Location Selected -->
-        <p class="h4 text-primary mb-3" id="selectedLocationDisplay">Loading Location...</p>
+        <!-- Main Display Content -->
+        <div id="mainDisplayContent" class="display-mode-content active-display">
+            <!-- Miladi Date | Hijri Date -->
+            <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-2 mb-2">
+                <p class="h5 mb-0 text-muted" id="currentMiladiDate">Loading Miladi Date...</p>
+                <span class="d-none d-md-block text-muted">|</span> <!-- Separator for desktop -->
+                <p class="h5 mb-0 text-muted" id="currentHijriDate">Loading Hijri Date...</p>
+            </div>
+            <!-- Current Time -->
+            <p class="display-5 fw-bold mb-3" id="currentTime">--:--:--</p>
+            <!-- Location Selected -->
+            <p class="h4 text-primary mb-3" id="selectedLocationDisplay">Loading Location...</p>
 
-        <!-- Next Prayer Time & Countdown -->
-        <div class="prayer-status-box mb-4 mx-auto">
-            <p class="h3 mb-1" id="nextPrayerName">Next Prayer: N/A</p>
-            <p class="h5 text-muted mb-2" id="nextPrayerTime">--:--</p>
-            <p class="h2 fw-bold mb-0 text-success" id="countdownToNextPrayer">--:--:--</p>
+            <!-- Next Prayer Time & Countdown -->
+            <div class="prayer-status-box mb-4 mx-auto">
+                <p class="h3 mb-1" id="nextPrayerName">Next Prayer: N/A</p>
+                <p class="h5 text-muted mb-2" id="nextPrayerTime">--:--</p>
+                <p class="h2 fw-bold mb-0 text-success" id="countdownToNextPrayer">--:--:--</p>
+            </div>
         </div>
+
+        <!-- Prayer Announcement Display (NEW) -->
+        <div id="prayerAnnouncementDisplay" class="display-mode-content">
+            <p class="h1 mb-3">Now it is time for prayer:</p>
+            <p class="display-3 fw-bold text-primary mb-2" id="announcementPrayerName">PRAYER_NAME</p>
+            <p class="h2 text-muted mb-4" id="announcementPrayerTime">PRAYER_TIME</p>
+            <p class="h3 text-secondary" id="announcementZoneName">ZONE_NAME</p>
+        </div>
+
+        <!-- Iqama Countdown Display (NEW) -->
+        <div id="iqamaCountdownDisplay" class="display-mode-content">
+            <p class="h2 mb-2" id="iqamaPrayerName">PRAYER_NAME</p>
+            <p class="h3 text-muted mb-4" id="iqamaPrayerTime">PRAYER_TIME</p>
+            <p class="display-1 fw-bold text-success mb-4" id="iqamaCountdown">--:--:--</p>
+            <p class="h4 text-secondary" id="iqamaZoneName">ZONE_NAME</p>
+        </div>
+
+        <!-- Post-Iqama Message Display (NEW) -->
+        <div id="postIqamaMessageDisplay" class="display-mode-content">
+            <p class="display-4 fw-bold text-primary mb-3">“Straighten your rows. for the straightening of a row is a part of the perfection of prayer.”</p>
+            <p class="h5 text-muted mb-4">- Sahih Muslim (433)</p>
+            <p class="h1 text-secondary">Please silent your phone and devices.</p>
+        </div>
+
     </div>
 
     <!-- Prayer and Iqama Time Section (Bottom full-width section with table) -->
@@ -158,7 +184,7 @@
                         <option value="6">Saturday</option>
                     </select>
                 </div>
-                
+
                 <div class="mb-3">
                     <label for="autoSyncTime" class="form-label">Time (HH:MM):</label>
                     <input type="time" class="form-control" id="autoSyncTime" value="03:00">
@@ -194,7 +220,7 @@
                 </div>
                 <div class="col-6">
                     <label for="iqamaMaghrib" class="form-label mb-0">Maghrib</label>
-                    <input type="number" class="form-control" id="iqamaMaghrib" data-prayer="maghrib" value="10" min="0" max="60"> <!-- Defaulted to 10 -->
+                    <input type="number" class="form-control" id="iqamaMaghrib" data-prayer="maghrib" value="10" min="0" max="60">
                 </div>
                 <div class="col-6">
                     <label for="iqamaIsha" class="form-label mb-0">Isha</label>
