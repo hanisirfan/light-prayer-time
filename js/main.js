@@ -157,6 +157,10 @@ const simApiSyncFailBtn = document.getElementById('simApiSyncFailBtn');       //
 const returnToMainBtn = document.getElementById('returnToMainBtn');
 const resetAnnouncedPrayersBtn = document.getElementById('resetAnnouncedPrayersBtn');
 
+// New DOM elements for Mosque Name
+const mosqueNameInput = document.getElementById('mosqueNameInput');
+const mosqueNameDisplay = document.getElementById('mosqueNameDisplay');
+
 
 let db; // IndexedDB instance
 let todayPrayerDataGlobal = null; // Store today's prayer data globally for clock updates
@@ -199,6 +203,9 @@ let activePrayerDetails = null; // Stores details for the prayer currently in an
 
 // Debug Mode State (NEW, managed by UI switch and stored in IndexedDB)
 let debugModeEnabled = false;
+
+// Mosque Name setting
+let mosqueName = '';
 
 
 /**
@@ -838,7 +845,8 @@ function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
 async function displayPrayerTimes(locationCode, year) {
     prayerTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Loading today\'s prayer times...</td></tr>';
     iqamaTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center">Loading Iqama times...</td></tr>';
-    
+    mosqueNameDisplay.textContent = mosqueName; // Update mosque name display
+
     // Clear previous countdown if any
     if (nextPrayerTimeout) {
         clearTimeout(nextPrayerTimeout);
@@ -1347,6 +1355,18 @@ async function loadSettings() {
             setTheme('dark'); // Default theme if nothing is found anywhere
         }
     }
+
+    // Load Mosque Name (NEW)
+    const loadedMosqueName = await loadSetting('mosqueName');
+    if (loadedMosqueName !== undefined) {
+        mosqueName = loadedMosqueName;
+        mosqueNameInput.value = mosqueName; // Populate input field
+        mosqueNameDisplay.textContent = mosqueName; // Display it immediately
+    } else {
+        mosqueName = ''; // Default empty
+        mosqueNameInput.value = '';
+        mosqueNameDisplay.textContent = '';
+    }
 }
 
 
@@ -1359,8 +1379,8 @@ async function saveAllSettings() {
     await saveSetting('autoSync', autoSyncSettings);
     await saveSetting('debugModeEnabled', debugModeEnabled);
     await saveSetting('lastSelectedLocation', locationSelect.value);
-    // Explicitly save the theme state based on the current switch
     await saveSetting('theme', darkModeSwitch.checked ? 'dark' : 'light'); 
+    await saveSetting('mosqueName', mosqueName); // Save Mosque Name (NEW)
     console.log("All settings saved to IndexedDB.");
 }
 
@@ -1384,7 +1404,7 @@ function handleIqamaInputChange(event) {
     const prayerKey = input.dataset.prayer;
     const value = parseInt(input.value, 10);
 
-    if (!isNaN(value) && value >= 0 && value >= 0 && value <= 60) { // Fixed: Changed second '>=' to '<=' for max value
+    if (!isNaN(value) && value >= 0 && value <= 60) { // Corrected the redundant '>='
         iqamaOffsets[prayerKey] = value;
         saveAllSettings(); // Save all settings
         // Re-display prayer times to update Iqama row and next prayer countdown
@@ -1681,7 +1701,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await openDatabase();
 
     // Load all other settings from IndexedDB (this will override initial localStorage theme if different)
-    await loadSettings(); // This will load iqamaOffsets, use24HourFormat, autoSyncSettings, and debugModeEnabled
+    await loadSettings(); // This will load iqamaOffsets, use24HourFormat, autoSyncSettings, debugModeEnabled, and mosqueName
 
     // Populate locations dropdown and set last selected
     await populateLocationSelect();
@@ -1732,6 +1752,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     iqamaAsrInput.addEventListener('input', handleIqamaInputChange);
     iqamaMaghribInput.addEventListener('input', handleIqamaInputChange);
     iqamaIshaInput.addEventListener('input', handleIqamaInputChange);
+
+    // Mosque Name Input Listener (NEW)
+    mosqueNameInput.addEventListener('input', async (event) => {
+        mosqueName = event.target.value.trim();
+        await saveAllSettings(); // Save the new mosque name
+        mosqueNameDisplay.textContent = mosqueName; // Update display immediately
+    });
 
     // Auto Sync Master Switch Listener (NEW)
     autoSyncMasterSwitch.addEventListener('change', async (event) => {

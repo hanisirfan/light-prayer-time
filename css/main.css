@@ -22,6 +22,7 @@
     --list-group-item-border: rgba(0, 0, 0, 0.125);
     --iqama-countdown-danger-color: #dc3545; /* Bootstrap danger red */
     --iqama-countdown-warning-color: #ffc107; /* Bootstrap warning orange */
+    --input-placeholder-color: #6c757d; /* Default placeholder color for light mode */
 }
 
 body.dark-mode {
@@ -46,6 +47,7 @@ body.dark-mode {
     --list-group-item-border: rgba(255, 255, 255, 0.125);
     --iqama-countdown-danger-color: #fd7e14; /* Orange-red for dark mode danger */
     --iqama-countdown-warning-color: #ffda6a; /* Lighter orange for dark mode warning */
+    --input-placeholder-color: #adb5bd; /* Lighter placeholder color for dark mode */
 }
 
 body {
@@ -90,7 +92,7 @@ body {
     flex-direction: column;
     justify-content: center; /* Center content vertically within the section */
     align-items: center; /* Center content horizontally within the section */
-    min-height: 75vh; /* Adjusted minimum height to 75% of viewport height */
+    min-height: 70vh; /* Adjusted minimum height to 70% of viewport height */
     flex-grow: 1; /* Allow to grow more if content demands it, but min-height is dominant */
     position: relative; /* For absolute positioning of sub-displays */
 }
@@ -180,12 +182,17 @@ body {
 
 /* Table container styling - now just for the p-3 border */
 .table-container { /* Renamed for clarity, removed rounded-3 */
-    background-color: var(--prayer-status-box-bg) !important; /* Use the prayer status box bg */
-    border: 1px solid var(--border-color) !important; /* Keep border */
     border-radius: 0; /* Remove rounded corners */
     padding: 1rem; /* Internal padding for table */
     transition: background-color 0.3s ease, border-color 0.3s ease;
     width: 100%; /* Ensure it always takes full width of its parent */
+}
+
+/* Mosque Name Display Styling */
+#mosqueNameDisplay {
+    font-weight: bold; /* Make mosque name bold */
+    margin-top: 0.5rem; /* Adjust as needed for spacing */
+    color: var(--text-color) !important; /* Ensure visibility in both themes */
 }
 
 
@@ -238,6 +245,16 @@ body {
     border-color: var(--border-color);
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
+
+/* Placeholder styling for form controls */
+.form-control::placeholder {
+  color: var(--input-placeholder-color); /* Use the new variable for placeholder color */
+  opacity: 1; /* Ensure placeholder is not transparent */
+}
+body.dark-mode .form-control::placeholder {
+  color: var(--input-placeholder-color); /* Ensure specific color for dark mode */
+}
+
 
 .form-control:focus {
     background-color: var(--offcanvas-bg); /* Maintain background on focus */
