@@ -86,7 +86,7 @@ body {
     flex-direction: column;
     justify-content: center; /* Center content vertically within the section */
     align-items: center; /* Center content horizontally within the section */
-    min-height: 70vh; /* Adjusted minimum height to 70% of viewport height */
+    min-height: 75vh; /* Adjusted minimum height to 75% of viewport height */
     flex-grow: 1; /* Allow to grow more if content demands it, but min-height is dominant */
 }
 
@@ -379,7 +379,7 @@ body {
     .table-responsive > .table {
         min-width: 650px; /* Adjust this value as needed to ensure scrolling. Typical phone width is 320-420px. */
     }
-    
+
     /* Ensure full width for sections on small screens and remove external padding */
     .display-section, .prayer-table-section {
         padding-left: 0;
