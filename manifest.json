@@ -1,6 +1,6 @@
 {
-    "name": "JAKIM Prayer Times",
-    "short_name": "Prayer Times",
+    "name": "Light Prayer Times",
+    "short_name": "LightPrayer",
     "description": "Your personal prayer times companion, featuring JAKIM data, Iqama times, and PWA support.",
     "start_url": "./index.html",
     "display": "standalone",

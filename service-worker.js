@@ -1,6 +1,6 @@
 // service-worker.js
 
-const CACHE_NAME = 'prayer-times-cache-v1';
+const CACHE_NAME = 'prayer-times-cache-v1'; // Keep same cache name or increment if you want to force re-cache
 const urlsToCache = [
     './', // Caches the root (index.html)
     './index.html',

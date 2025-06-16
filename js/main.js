@@ -2,8 +2,9 @@
 
 // Constants for IndexedDB
 const DB_NAME = 'PrayerTimesDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Increment DB version for new object store
 const STORE_NAME = 'prayerTimesStore'; // Stores data for each location + year
+const SYNC_HISTORY_STORE_NAME = 'syncHistoryStore'; // NEW: Store for sync records
 const SETTINGS_KEY = 'prayerTimeSettings'; // Key for saving settings in localStorage
 
 // JAKIM API Base URL
@@ -73,6 +74,7 @@ const JAKIM_ZONES = [
 ];
 
 // DOM Elements
+const body = document.body; // FIX: Define 'body' reference
 const locationSelect = document.getElementById('locationSelect');
 const syncButton = document.getElementById('syncButton');
 const prayerTimesTableBody = document.getElementById('prayerTimesTableBody');
@@ -81,6 +83,8 @@ const iqamaTimesTableBody = document.getElementById('iqamaTimesTableBody'); // G
 const messageModal = new bootstrap.Modal(document.getElementById('messageModal'));
 const modalMessageContent = document.getElementById('modalMessageContent');
 const syncButtonSpinner = syncButton.querySelector('.spinner-border');
+const syncHistoryModal = new bootstrap.Modal(document.getElementById('syncHistoryModal')); // NEW
+const syncHistoryList = document.getElementById('syncHistoryList'); // NEW
 
 // Main display elements
 const currentTimeDisplay = document.getElementById('currentTime');
@@ -91,8 +95,7 @@ const nextPrayerNameDisplay = document.getElementById('nextPrayerName');
 const nextPrayerTimeDisplay = document.getElementById('nextPrayerTime');
 const countdownToNextPrayerDisplay = document.getElementById('countdownToNextPrayer');
 const darkModeSwitch = document.getElementById('darkModeSwitch');
-const timeFormatSwitch = document.getElementById('timeFormatSwitch'); // NEW: Time format switch
-const body = document.body;
+const timeFormatSwitch = document.getElementById('timeFormatSwitch');
 
 // Iqama input fields
 const iqamaFajrInput = document.getElementById('iqamaFajr');
@@ -101,21 +104,37 @@ const iqamaAsrInput = document.getElementById('iqamaAsr');
 const iqamaMaghribInput = document.getElementById('iqamaMaghrib');
 const iqamaIshaInput = document.getElementById('iqamaIsha');
 
+// Auto Sync Elements (NEW)
+const autoSyncMasterSwitch = document.getElementById('autoSyncMasterSwitch');
+const autoSyncScheduleDetails = document.getElementById('autoSyncScheduleDetails');
+const autoSyncFrequencyRadios = document.querySelectorAll('input[name="autoSyncFrequency"]');
+const autoSyncDaySelect = document.getElementById('autoSyncDay');
+const autoSyncTimeInput = document.getElementById('autoSyncTime');
+
 let db; // IndexedDB instance
 let todayPrayerDataGlobal = null; // Store today's prayer data globally for clock updates
 let nextPrayerTimeout; // To clear previous countdown timeouts
 
-// Default Iqama offsets in minutes
+// Default Iqama offsets in minutes (All now 10 by default)
 let iqamaOffsets = {
     fajr: 10,
     dhuhr: 10,
     asr: 10,
-    maghrib: 5,
+    maghrib: 10, // Changed from 5 to 10
     isha: 10
 };
 
 // Default time format (false = 12-hour, true = 24-hour)
-let use24HourFormat = true; // Default to 24-hour as requested by implicit removal of seconds
+let use24HourFormat = true; // Default to 24-hour
+
+// Auto sync settings
+let autoSyncSettings = {
+    enabled: false, // NEW: Master switch for auto sync
+    frequency: 'weekly', // 'weekly', 'bi-weekly', 'monthly'
+    day: 0, // Day of week (0-6, Sunday-Saturday)
+    time: '03:00', // HH:MM
+    lastAutoSync: null // Timestamp of last successful auto sync
+};
 
 /**
  * Helper function to format a time string (HH:MM:SS or HH:MM) to the user's preferred format.
@@ -127,9 +146,9 @@ function formatTime(timeStr, includeSeconds = false) {
     if (!timeStr || timeStr.trim() === '--:--') {
         return includeSeconds ? '--:--:--' : '--:--';
     }
-    const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+    const parts = timeStr.split(':').map(Number);
     const date = new Date();
-    date.setHours(hours, minutes, seconds || 0, 0); // Use 0 for seconds if not present
+    date.setHours(parts[0], parts[1], parts[2] || 0, 0); // Use 0 for seconds if not present
 
     const options = {
         hour: '2-digit',
@@ -140,6 +159,15 @@ function formatTime(timeStr, includeSeconds = false) {
         options.second = '2-digit';
     }
 
+    // Explicitly format for 24-hour without AM/PM if use24HourFormat is true
+    if (use24HourFormat) {
+        let h = String(date.getHours()).padStart(2, '0');
+        let m = String(date.getMinutes()).padStart(2, '0');
+        let s = String(date.getSeconds()).padStart(2, '0');
+        return includeSeconds ? `${h}:${m}:${s}` : `${h}:${m}`;
+    }
+    
+    // Otherwise, use browser's locale-sensitive formatting for 12-hour
     return date.toLocaleTimeString([], options);
 }
 
@@ -166,7 +194,7 @@ function showLoading(isLoading) {
     } else {
         syncButtonSpinner.classList.add('d-none');
         syncButton.disabled = false;
-        syncButton.innerHTML = `Sync`;
+        syncButton.innerHTML = `Sync Now`;
     }
 }
 
@@ -177,12 +205,17 @@ function showLoading(isLoading) {
 function setTheme(mode) {
     if (mode === 'dark') {
         body.classList.add('dark-mode');
-        prayerTimesTable.classList.add('table-dark'); // Add table-dark class
+        // Add table-dark class only if it's not already there and we are in dark mode
+        if (prayerTimesTable && !prayerTimesTable.classList.contains('table-dark')) { // Added null check for prayerTimesTable
+            prayerTimesTable.classList.add('table-dark');
+        }
         localStorage.setItem('theme', 'dark');
         darkModeSwitch.checked = true;
     } else {
         body.classList.remove('dark-mode');
-        prayerTimesTable.classList.remove('table-dark'); // Remove table-dark class
+        if (prayerTimesTable) { // Added null check for prayerTimesTable
+            prayerTimesTable.classList.remove('table-dark'); // Always remove in light mode
+        }
         localStorage.setItem('theme', 'light');
         darkModeSwitch.checked = false;
     }
@@ -198,10 +231,21 @@ function openDatabase() {
 
         request.onupgradeneeded = (event) => {
             db = event.target.result;
-            // Create an object store to hold prayer times data.
-            // The key path is 'id' which will be 'locationCode_year'
-            db.createObjectStore(STORE_NAME, { keyPath: 'id' });
-            console.log('IndexedDB upgraded: object store created.');
+            // Create object store for prayer times
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                console.log('IndexedDB upgrade: prayerTimesStore created.');
+            } else {
+                console.log('IndexedDB: prayerTimesStore already exists.');
+            }
+            // Create object store for sync history (NEW)
+            if (!db.objectStoreNames.contains(SYNC_HISTORY_STORE_NAME)) {
+                // Use { keyPath: 'id', autoIncrement: true } for a store where you add records
+                db.createObjectStore(SYNC_HISTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                console.log('IndexedDB upgrade: syncHistoryStore created.');
+            } else {
+                console.log('IndexedDB: syncHistoryStore already exists.');
+            }
         };
 
         request.onsuccess = (event) => {
@@ -264,10 +308,117 @@ async function getPrayerTimesForYear(locationCode, year) {
         return data ? data.data : null;
     } catch (error) {
         console.error('Error retrieving prayer times from IndexedDB:', error);
-        showMessage('Error', 'Failed to retrieve prayer times from local database.');
+        // Do not show message for simple retrieval failure, just return null
         return null;
     }
 }
+
+/**
+ * Saves a sync record to IndexedDB. (NEW)
+ * @param {string} locationCode - The JAKIM zone code.
+ * @param {string} syncMethod - 'MANUAL' or 'AUTO'.
+ * @returns {Promise<void>}
+ */
+async function addSyncRecord(locationCode, syncMethod) {
+    try {
+        const transaction = db.transaction([SYNC_HISTORY_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(SYNC_HISTORY_STORE_NAME);
+        const syncTime = new Date();
+        const record = {
+            zoneCode: locationCode,
+            zoneName: JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode,
+            syncTime: syncTime.toISOString(), // Store as ISO string for easy sorting
+            method: syncMethod
+        };
+
+        await new Promise((resolve, reject) => {
+            const request = store.add(record);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+        console.log(`Sync record added: ${record.zoneName} (${record.method}) at ${syncTime.toLocaleString()}`);
+        await cleanupSyncHistory(); // Keep only latest 10
+    } catch (error) {
+        console.error('Error adding sync record:', error);
+    }
+}
+
+/**
+ * Retrieves and displays sync history. (NEW)
+ */
+async function displaySyncHistory() {
+    syncHistoryList.innerHTML = ''; // Clear existing list
+    try {
+        const transaction = db.transaction([SYNC_HISTORY_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(SYNC_HISTORY_STORE_NAME);
+        const allRecords = await new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        if (allRecords.length === 0) {
+            syncHistoryList.innerHTML = '<li class="list-group-item text-muted text-center">No sync history available.</li>';
+            return;
+        }
+
+        // Sort by syncTime in descending order (most recent first)
+        allRecords.sort((a, b) => new Date(b.syncTime).getTime() - new Date(a.syncTime).getTime());
+
+        // Display latest 10 syncs
+        const displayRecords = allRecords.slice(0, 10);
+
+        displayRecords.forEach(record => {
+            const listItem = document.createElement('li');
+            listItem.className = 'list-group-item';
+            const syncDate = new Date(record.syncTime);
+            listItem.innerHTML = `
+                <strong>Zone:</strong> ${record.zoneName}<br>
+                <strong>Last Sync:</strong> ${syncDate.toLocaleString()}<br>
+                <strong>Sync Method:</strong> ${record.method}
+            `;
+            syncHistoryList.appendChild(listItem);
+        });
+    } catch (error) {
+        console.error('Error displaying sync history:', error);
+        syncHistoryList.innerHTML = '<li class="list-group-item text-danger text-center">Error loading sync history.</li>';
+    }
+}
+
+/**
+ * Cleans up old sync history records, keeping only the latest 10. (NEW)
+ */
+async function cleanupSyncHistory() {
+    try {
+        const transaction = db.transaction([SYNC_HISTORY_STORE_NAME], 'readwrite');
+        const store = transaction.objectStore(SYNC_HISTORY_STORE_NAME);
+
+        const allRecords = await new Promise((resolve, reject) => {
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        if (allRecords.length > 10) {
+            // Sort by syncTime in ascending order (oldest first)
+            allRecords.sort((a, b) => new Date(a.syncTime).getTime() - new Date(b.syncTime).getTime());
+            
+            // Delete oldest records until only 10 remain
+            for (let i = 0; i < allRecords.length - 10; i++) {
+                // Delete by id (keyPath)
+                await new Promise((resolve, reject) => {
+                    const deleteRequest = store.delete(allRecords[i].id);
+                    deleteRequest.onsuccess = () => resolve();
+                    deleteRequest.onerror = () => reject(deleteRequest.error);
+                });
+            }
+            console.log(`Cleaned up sync history, now keeping 10 records.`);
+        }
+    } catch (error) {
+        console.error('Error cleaning up sync history:', error);
+    }
+}
+
 
 /**
  * Fetches prayer times for a given zone, year, and month from the JAKIM API.
@@ -279,12 +430,15 @@ async function getPrayerTimesForYear(locationCode, year) {
  */
 async function fetchPrayerTimesForMonth(zone, year, month) {
     const url = `${API_BASE_URL}&zone=${zone}&period=month&year=${year}&month=${month}`;
+    let failedMonths = []; // Define failedMonths here
     try {
+        console.log(`API URL: ${url}`); // Debugging API URL
         const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         const data = await response.json();
+        console.log("Full API Response: ", data); // Log full response
 
         // Check if data.prayerTime exists and is an array, and if it has actual data
         if (data.status === 'OK!' && Array.isArray(data.prayerTime) && data.prayerTime.length > 0) {
@@ -303,12 +457,14 @@ async function fetchPrayerTimesForMonth(zone, year, month) {
 /**
  * Fetches and stores all prayer times for the current year for a selected location.
  * @param {string} locationCode - The JAKIM zone code.
+ * @param {string} syncMethod - 'MANUAL' or 'AUTO'.
  */
-async function fetchAndStoreAllPrayerTimes(locationCode) {
+async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
     showLoading(true);
     const currentYear = new Date().getFullYear();
     let allPrayerTimes = [];
-    let failedMonths = [];
+    let fetchSuccessful = true; // Flag to track if API calls were successful for the year
+    let failedMonths = []; // Define failedMonths here
 
     // Clear existing data for the selected location and year before syncing
     try {
@@ -331,6 +487,8 @@ async function fetchAndStoreAllPrayerTimes(locationCode) {
             if (monthlyData.length > 0) {
                 allPrayerTimes = allPrayerTimes.concat(monthlyData);
             } else {
+                // If any month fails to return data, consider the overall fetch for the year incomplete
+                // but still process whatever data was retrieved.
                 failedMonths.push(month);
             }
         }
@@ -339,7 +497,7 @@ async function fetchAndStoreAllPrayerTimes(locationCode) {
             // Sort by date to ensure correct order
             allPrayerTimes.sort((a, b) => {
                 const parseDate = (dateStr) => {
-                    const parts = dateStr.split('-');
+                    const parts = dateStr.split('-'); // e.g., "01-Jan-2025"
                     const monthMap = {
                         'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
                         'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
@@ -350,6 +508,13 @@ async function fetchAndStoreAllPrayerTimes(locationCode) {
             });
 
             await savePrayerTimes(locationCode, currentYear, allPrayerTimes);
+            await addSyncRecord(locationCode, syncMethod); // Add record to history (NEW)
+            
+            // Update lastAutoSync only if it was an auto sync
+            if (syncMethod === 'AUTO') {
+                autoSyncSettings.lastAutoSync = Date.now();
+                saveSettings(); // Save updated auto sync settings
+            }
 
             let message = `Prayer times for ${JAKIM_ZONES.find(z => z.code === locationCode).name} for ${currentYear} have been synchronized successfully.`;
             if (failedMonths.length > 0) {
@@ -358,10 +523,12 @@ async function fetchAndStoreAllPrayerTimes(locationCode) {
             showMessage('Sync Complete', message);
             displayPrayerTimes(locationCode, currentYear); // Re-display after sync
         } else {
+            fetchSuccessful = false; // Mark as not successful if no data was retrieved at all
             showMessage('Sync Failed', 'Could not fetch any prayer times for the selected location and year. The API might not have data available for the current year yet, or there was an issue with the fetch. Please try again later.');
         }
 
     } catch (error) {
+        fetchSuccessful = false;
         console.error('Error during full year sync:', error);
         showMessage('Error', `An error occurred during synchronization: ${error.message}. Please check your internet connection and try again.`);
     } finally {
@@ -373,6 +540,11 @@ async function fetchAndStoreAllPrayerTimes(locationCode) {
  * Populates the location select dropdown with JAKIM zones and loads last selected.
  */
 function populateLocationSelect() {
+    // Ensure locationSelect is available before manipulating
+    if (!locationSelect) {
+        console.error("Location select element not found!");
+        return;
+    }
     locationSelect.innerHTML = ''; // Clear existing options
     JAKIM_ZONES.forEach(zone => {
         const option = document.createElement('option');
@@ -394,7 +566,7 @@ function populateLocationSelect() {
 }
 
 /**
- * Formats a Miladi date into "DD Mon YYYY Miladi" format.
+ * Formats a Miladi date into "DD Mon. YYYY Miladi" format.
  * @param {Date} date - The Miladi date object.
  * @returns {string} Formatted date string.
  */
@@ -443,6 +615,7 @@ function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
     date.setMinutes(date.getMinutes() + offsetMinutes); // Add offset
 
     // Format the resulting time using the global formatTime function
+    // Pass '00' for seconds as calculateIqamaTime always produces HH:MM
     return formatTime(`${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:00`);
 }
 
@@ -464,10 +637,10 @@ async function displayPrayerTimes(locationCode, year) {
     const data = await getPrayerTimesForYear(locationCode, year);
 
     // Update current location display regardless of data availability
-    selectedLocationDisplay.textContent = JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode;
+    selectedLocationDisplay.textContent = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || locationCode;
 
     const today = new Date();
-    const todayFormattedForComparison = today.toISOString().slice(0, 10); // YYYY-MM-DD
+    const todayFormattedForComparison = today.toISOString().slice(0, 10); //YYYY-MM-DD
 
     let todayData = null;
     if (data && data.length > 0) {
@@ -570,7 +743,7 @@ function updateClockAndPrayerStatus() {
             const [pHours, pMinutes] = timeStr.split(':').map(Number);
             allEventsForToday.push({
                 name: prayerNamesMap[key],
-                timeStr: formatTime(timeStr), // Format to user's preference (HH:MM)
+                timeStr: formatTime(timeStr, false), // Format to user's preference (HH:MM), no seconds
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0)
             });
         }
@@ -585,7 +758,7 @@ function updateClockAndPrayerStatus() {
             const [iHours, iMinutes] = iqamaTimeStrRaw.split(':').map(Number);
             allEventsForToday.push({
                 name: `Iqama ${prayerNamesMap[key]}`, // Name for Iqama
-                timeStr: formatTime(iqamaTimeStrRaw), // Format to user's preference (HH:MM)
+                timeStr: formatTime(iqamaTimeStrRaw, false), // Format to user's preference (HH:MM), no seconds
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), iHours, iMinutes, 0)
             });
         }
@@ -633,7 +806,7 @@ function updateClockAndPrayerStatus() {
             if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr.trim() !== '--:--') {
                 const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
                 nextEventName = 'Fajr (Tomorrow)';
-                nextEventTime = formatTime(tomorrowFajrData.fajr); // Format to user's preference (HH:MM)
+                nextEventTime = formatTime(tomorrowFajrData.fajr, false); // Format to user's preference (HH:MM), no seconds
                 nextEventDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
                 updateNextPrayerDisplay(nextEventName, nextEventTime, nextEventDateTime, now);
             } else {
@@ -685,7 +858,7 @@ function updateNextPrayerDisplay(name, time, dateTimeObj, currentTimeObj) {
 }
 
 /**
- * Loads settings (Iqama offsets, time format) from localStorage.
+ * Loads settings (Iqama offsets, time format, auto sync) from localStorage.
  */
 function loadSettings() {
     const savedSettings = localStorage.getItem(SETTINGS_KEY);
@@ -693,27 +866,65 @@ function loadSettings() {
         try {
             const parsedSettings = JSON.parse(savedSettings);
             if (parsedSettings.iqamaOffsets) {
-                iqamaOffsets = { ...iqamaOffsets, ...parsedSettings.iqamaOffsets };
+                // Merge loaded offsets with defaults, ensuring new defaults are applied if not in saved.
+                Object.assign(iqamaOffsets, parsedSettings.iqamaOffsets);
             }
+            
             // Load time format preference, default to true (24H) if not set
             use24HourFormat = parsedSettings.use24HourFormat !== undefined ? parsedSettings.use24HourFormat : true;
             timeFormatSwitch.checked = use24HourFormat; // Update the UI switch
+
+            // Load auto sync settings (NEW)
+            if (parsedSettings.autoSync) {
+                Object.assign(autoSyncSettings, parsedSettings.autoSync);
+            }
+            // Update UI for auto sync settings
+            autoSyncMasterSwitch.checked = autoSyncSettings.enabled; // Master switch
+            const selectedFrequencyRadio = document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`);
+            if (selectedFrequencyRadio) {
+                selectedFrequencyRadio.checked = true;
+            }
+            autoSyncDaySelect.value = autoSyncSettings.day;
+            autoSyncTimeInput.value = autoSyncSettings.time;
+            toggleAutoSyncScheduleOptions(); // Show/hide day/time inputs based on master switch and frequency
         } catch (e) {
             console.error("Error parsing saved settings from localStorage", e);
+            // If parsing fails, reset to default settings to prevent further errors
+            localStorage.removeItem(SETTINGS_KEY);
+            console.log("Cleared corrupted settings from localStorage.");
+            // Re-apply default autoSyncSettings as well
+            Object.assign(autoSyncSettings, {
+                enabled: false,
+                frequency: 'weekly',
+                day: 0,
+                time: '03:00',
+                lastAutoSync: null
+            });
+            autoSyncMasterSwitch.checked = autoSyncSettings.enabled;
+            document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`).checked = true;
+            autoSyncDaySelect.value = autoSyncSettings.day;
+            autoSyncTimeInput.value = autoSyncSettings.time;
+            toggleAutoSyncScheduleOptions();
         }
     } else {
-        // If no settings saved, ensure switch matches the default
+        // If no settings saved, ensure switches/inputs match the default values
         timeFormatSwitch.checked = use24HourFormat;
+        autoSyncMasterSwitch.checked = autoSyncSettings.enabled;
+        document.querySelector(`input[name="autoSyncFrequency"][value="${autoSyncSettings.frequency}"]`).checked = true;
+        autoSyncDaySelect.value = autoSyncSettings.day;
+        autoSyncTimeInput.value = autoSyncSettings.time;
+        toggleAutoSyncScheduleOptions();
     }
 }
 
 /**
- * Saves settings (Iqama offsets, time format) to localStorage.
+ * Saves settings (Iqama offsets, time format, auto sync) to localStorage.
  */
 function saveSettings() {
     const settingsToSave = {
         iqamaOffsets: iqamaOffsets,
-        use24HourFormat: use24HourFormat
+        use24HourFormat: use24HourFormat,
+        autoSync: autoSyncSettings // Save auto sync settings (NEW)
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
 }
@@ -750,19 +961,108 @@ function handleIqamaInputChange(event) {
     }
 }
 
+/**
+ * Toggles the visibility of auto-sync schedule options based on master switch and frequency selection. (NEW)
+ */
+function toggleAutoSyncScheduleOptions() {
+    if (autoSyncMasterSwitch.checked) {
+        autoSyncScheduleDetails.style.display = 'block';
+    } else {
+        autoSyncScheduleDetails.style.display = 'none';
+    }
+}
+
+/**
+ * Checks if an auto sync is due and triggers it. (NEW)
+ */
+async function checkAndRunAutoSync() {
+    const now = new Date();
+    const lastSyncTime = autoSyncSettings.lastAutoSync ? new Date(autoSyncSettings.lastAutoSync) : null;
+    let syncDue = false;
+
+    if (!autoSyncSettings.enabled) {
+        console.log('Auto sync is disabled. Skipping check.');
+        return;
+    }
+
+    const [scheduledHours, scheduledMinutes] = autoSyncSettings.time.split(':').map(Number);
+    let targetSyncDateTime;
+
+    if (!lastSyncTime) {
+        // If never synced before, schedule for the next occurrence of the chosen day/time
+        targetSyncDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
+        if (targetSyncDateTime < now) { // If today's scheduled time passed
+            targetSyncDateTime.setDate(targetSyncDateTime.getDate() + 1); // Move to tomorrow
+        }
+        // Then adjust for selected day of week if needed
+        if (autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') {
+             targetSyncDateTime.setDate(targetSyncDateTime.getDate() + (autoSyncSettings.day - targetSyncDateTime.getDay() + 7) % 7);
+        } else if (autoSyncSettings.frequency === 'monthly') {
+            // For monthly, if no last sync, schedule for first chosen day of week next month
+            // or this month if day/time allows.
+            // Simplified: if current month's scheduled time passed, move to next month.
+            while (targetSyncDateTime < now) {
+                targetSyncDateTime.setMonth(targetSyncDateTime.getMonth() + 1);
+            }
+        }
+        syncDue = true; // Since no lastSyncTime, and auto sync is enabled, it's due
+        console.log('First auto sync: scheduling for', targetSyncDateTime.toLocaleString());
+    } else {
+        // Calculate next scheduled sync time based on lastSyncTime and frequency
+        targetSyncDateTime = new Date(lastSyncTime);
+        targetSyncDateTime.setHours(scheduledHours, scheduledMinutes, 0, 0); // Set to scheduled time
+
+        if (autoSyncSettings.frequency === 'weekly') {
+            targetSyncDateTime.setDate(targetSyncDateTime.getDate() + (7 - targetSyncDateTime.getDay() + autoSyncSettings.day) % 7);
+            // If the calculated date is still before or on the last sync, add another week
+            if (targetSyncDateTime.getTime() <= lastSyncTime.getTime()) {
+                targetSyncDateTime.setDate(targetSyncDateTime.getDate() + 7);
+            }
+        } else if (autoSyncSettings.frequency === 'bi-weekly') {
+            // First align to the correct day of the week if needed
+            targetSyncDateTime.setDate(targetSyncDateTime.getDate() + (autoSyncSettings.day - targetSyncDateTime.getDay() + 7) % 7);
+            // Then, ensure it's at least 2 weeks from last sync and in the future
+            while (targetSyncDateTime.getTime() <= lastSyncTime.getTime() || (targetSyncDateTime.getTime() - lastSyncTime.getTime() < (14 * 24 * 60 * 60 * 1000))) {
+                targetSyncDateTime.setDate(targetSyncDateTime.getDate() + 14);
+            }
+        } else if (autoSyncSettings.frequency === 'monthly') {
+            targetSyncDateTime.setMonth(targetSyncDateTime.getMonth() + 1); // Advance by one month from last sync
+            // Ensure the day of the week is correct if monthly still respects day of week
+            // (current logic uses lastSyncTime + X months, then sets time, not specific day-of-month).
+            // If current month's scheduled day has passed, jump to next month.
+            while (targetSyncDateTime.getTime() <= lastSyncTime.getTime()) {
+                targetSyncDateTime.setMonth(targetSyncDateTime.getMonth() + 1);
+            }
+        }
+        
+        // If current time is past the target sync date, then it's due
+        if (now.getTime() >= targetSyncDateTime.getTime()) {
+            syncDue = true;
+        }
+    }
+
+    if (syncDue) {
+        console.log('Auto sync is due. Initiating...');
+        await fetchAndStoreAllPrayerTimes(locationSelect.value, 'AUTO');
+    } else {
+        console.log('Auto sync not due yet. Next scheduled check:', targetSyncDateTime.toLocaleString());
+    }
+}
+
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
     // Open IndexedDB first
     await openDatabase();
 
-    // Load all saved settings (theme, time format, iqama offsets)
+    // Load all saved settings (theme, time format, iqama offsets, auto sync)
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme === 'light') {
         setTheme('light');
     } else {
         setTheme('dark'); // Default to dark mode or if 'dark' was saved
     }
-    loadSettings(); // This will load iqamaOffsets and use24HourFormat
+    loadSettings(); // This will load iqamaOffsets, use24HourFormat, and autoSyncSettings
 
     // Populate locations dropdown and set last selected
     populateLocationSelect();
@@ -775,22 +1075,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentYear = new Date().getFullYear();
     await displayPrayerTimes(initialLocationCode, currentYear); // This call will use the loaded time format
 
+    // Check and run auto sync after initial display (NEW)
+    checkAndRunAutoSync();
+
     // Theme switch listener
     darkModeSwitch.addEventListener('change', (event) => {
-        if (event.target.checked) {
-            setTheme('dark');
-        } else {
-            setTheme('light');
-        }
+        setTheme(event.target.checked ? 'dark' : 'light');
     });
 
-    // NEW: Time format switch listener
+    // Time format switch listener
     timeFormatSwitch.addEventListener('change', (event) => {
         use24HourFormat = event.target.checked;
         saveSettings(); // Save all settings
         // Re-display prayer times to update all time formats
         displayPrayerTimes(locationSelect.value, new Date().getFullYear());
-        updateClockAndPrayerStatus(); // Ensure current time updates immediately
+        // No need to call updateClockAndPrayerStatus() separately,
+        // displayPrayerTimes already calls it internally.
     });
 
     // Add change listener for location select (inside Offcanvas)
@@ -804,7 +1104,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Add click listener for sync button (inside Offcanvas)
     syncButton.addEventListener('click', async () => {
         const selectedLocation = locationSelect.value;
-        await fetchAndStoreAllPrayerTimes(selectedLocation);
+        await fetchAndStoreAllPrayerTimes(selectedLocation, 'MANUAL'); // Pass 'MANUAL' sync method
     });
 
     // Add input listeners for Iqama offset fields
@@ -814,6 +1114,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     iqamaMaghribInput.addEventListener('input', handleIqamaInputChange);
     iqamaIshaInput.addEventListener('input', handleIqamaInputChange);
 
+    // Auto Sync Master Switch Listener (NEW)
+    autoSyncMasterSwitch.addEventListener('change', (event) => {
+        autoSyncSettings.enabled = event.target.checked;
+        toggleAutoSyncScheduleOptions(); // Show/hide details based on master switch
+        saveSettings();
+        // If enabled, immediately check if a sync is due
+        if (autoSyncSettings.enabled) {
+            checkAndRunAutoSync();
+        }
+    });
+
+    // Auto Sync Radio and Select listeners (NEW)
+    autoSyncFrequencyRadios.forEach(radio => {
+        radio.addEventListener('change', (event) => {
+            autoSyncSettings.frequency = event.target.value;
+            saveSettings();
+        });
+    });
+    autoSyncDaySelect.addEventListener('change', (event) => {
+        autoSyncSettings.day = parseInt(event.target.value, 10);
+        saveSettings();
+    });
+    autoSyncTimeInput.addEventListener('change', (event) => {
+        autoSyncSettings.time = event.target.value;
+        saveSettings();
+    });
+
+    // Event listener for showing Sync History modal (NEW)
+    document.getElementById('syncHistoryModal').addEventListener('show.bs.modal', displaySyncHistory);
+
+
     // Start clock and prayer status updates (this will also trigger the initial countdown display)
-    updateClockAndPrayerStatus();
+    // Removed duplicate call to updateClockAndPrayerStatus() here, as displayPrayerTimes() already calls it.
 });
