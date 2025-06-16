@@ -184,7 +184,7 @@
                         <option value="6">Saturday</option>
                     </select>
                 </div>
-
+                
                 <div class="mb-3">
                     <label for="autoSyncTime" class="form-label">Time (HH:MM):</label>
                     <input type="time" class="form-control" id="autoSyncTime" value="03:00">
@@ -257,7 +257,7 @@
                     </select>
                     <button class="btn btn-warning" id="simPrayerAnnounceBtn">Go!</button>
                 </div>
-
+                
                 <label for="simIqamaDuration" class="form-label mb-0">Simulate Iqama Countdown (secs):</label>
                 <div class="input-group mb-3">
                     <input type="number" class="form-control" id="simIqamaDuration" value="45" min="1" max="300">
@@ -265,6 +265,8 @@
                 </div>
 
                 <button class="btn btn-warning" id="simPostIqamaBtn">Simulate Post-Iqama Message</button>
+                <button class="btn btn-warning" id="simApiSyncSuccessBtn">Simulate API Sync (Success)</button>
+                <button class="btn btn-warning" id="simApiSyncFailBtn">Simulate API Sync (Fail)</button>
                 <button class="btn btn-outline-secondary" id="returnToMainBtn">Return to Main Display</button>
                 <button class="btn btn-outline-danger" id="resetAnnouncedPrayersBtn">Reset Announced Prayers</button>
             </div>
@@ -352,6 +354,13 @@
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label for="syncHistorySortSelect" class="form-label">Sort By:</label>
+                        <select class="form-select" id="syncHistorySortSelect">
+                            <option value="latest">Latest</option>
+                            <option value="status">Status</option>
+                        </select>
+                    </div>
                     <ul id="syncHistoryList" class="list-group">
                         <li class="list-group-item text-muted text-center">No sync history available.</li>
                     </ul>

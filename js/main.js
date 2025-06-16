@@ -2,10 +2,10 @@
 
 // Constants for IndexedDB
 const DB_NAME = 'PrayerTimesDB';
-const DB_VERSION = 3; // Incremented DB version for new settings object store
+const DB_VERSION = 4; // Incremented DB version for new syncHistoryStore schema and settings
 const STORE_NAME = 'prayerTimesStore'; // Stores data for each location + year
 const SYNC_HISTORY_STORE_NAME = 'syncHistoryStore'; // Store for sync records
-const SETTINGS_STORE_NAME = 'appSettingsStore'; // NEW: Store for general app settings
+const SETTINGS_STORE_NAME = 'appSettingsStore'; // Store for general app settings
 
 // JAKIM API Base URL
 // Note: The API is undocumented and its behavior might change.
@@ -100,6 +100,7 @@ const modalMessageContent = document.getElementById('modalMessageContent');
 const syncButtonSpinner = syncButton.querySelector('.spinner-border');
 const syncHistoryModal = new bootstrap.Modal(document.getElementById('syncHistoryModal'));
 const syncHistoryList = document.getElementById('syncHistoryList');
+const syncHistorySortSelect = document.getElementById('syncHistorySortSelect'); // NEW
 
 // Main Display Elements
 const mainDisplayContent = document.getElementById('mainDisplayContent');
@@ -147,10 +148,12 @@ const autoSyncTimeInput = document.getElementById('autoSyncTime');
 const debugModeSwitch = document.getElementById('debugModeSwitch');
 const debugButtonsContainer = document.getElementById('debugButtonsContainer');
 const simPrayerAnnounceBtn = document.getElementById('simPrayerAnnounceBtn');
-const simPrayerSelect = document.getElementById('simPrayerSelect'); // New select for prayer
+const simPrayerSelect = document.getElementById('simPrayerSelect');
 const simIqamaCountdownBtn = document.getElementById('simIqamaCountdownBtn');
-const simIqamaDurationInput = document.getElementById('simIqamaDuration'); // New input for duration
+const simIqamaDurationInput = document.getElementById('simIqamaDuration');
 const simPostIqamaBtn = document.getElementById('simPostIqamaBtn');
+const simApiSyncSuccessBtn = document.getElementById('simApiSyncSuccessBtn'); // NEW
+const simApiSyncFailBtn = document.getElementById('simApiSyncFailBtn');       // NEW
 const returnToMainBtn = document.getElementById('returnToMainBtn');
 const resetAnnouncedPrayersBtn = document.getElementById('resetAnnouncedPrayersBtn');
 
@@ -228,7 +231,7 @@ function formatTime(timeStr, includeSeconds = false) {
         let s = String(date.getSeconds()).padStart(2, '0');
         return includeSeconds ? `${h}:${m}:${s}` : `${h}:${m}`;
     }
-
+    
     // Otherwise, use browser's locale-sensitive formatting for 12-hour
     return date.toLocaleTimeString([], options);
 }
@@ -300,14 +303,22 @@ function openDatabase() {
             } else {
                 console.log('IndexedDB: prayerTimesStore already exists.');
             }
-            // Create object store for sync history
-            if (!db.objectStoreNames.contains(SYNC_HISTORY_STORE_NAME)) {
-                db.createObjectStore(SYNC_HISTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
-                console.log('IndexedDB upgrade: syncHistoryStore created.');
+
+            // Create or upgrade object store for sync history
+            let syncHistoryObjectStore;
+            if (db.objectStoreNames.contains(SYNC_HISTORY_STORE_NAME)) {
+                // If it exists but we are upgrading to a version that changes its schema, delete and recreate
+                // This will clear existing sync history, but ensures new fields are available.
+                console.log(`IndexedDB upgrade: Deleting and recreating ${SYNC_HISTORY_STORE_NAME} for schema update.`);
+                db.deleteObjectStore(SYNC_HISTORY_STORE_NAME);
+                syncHistoryObjectStore = db.createObjectStore(SYNC_HISTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
             } else {
-                console.log('IndexedDB: syncHistoryStore already exists.');
+                console.log('IndexedDB upgrade: syncHistoryStore created.');
+                syncHistoryObjectStore = db.createObjectStore(SYNC_HISTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
             }
-            // Create object store for app settings (NEW)
+            // Ensure any new indexes for sorting are added here if needed, but not required for current sorting
+            
+            // Create object store for app settings
             if (!db.objectStoreNames.contains(SETTINGS_STORE_NAME)) {
                 db.createObjectStore(SETTINGS_STORE_NAME, { keyPath: 'name' });
                 console.log('IndexedDB upgrade: appSettingsStore created.');
@@ -344,7 +355,7 @@ function openDatabase() {
                         console.error("Error migrating old settings from localStorage:", e);
                     }
                 }
-
+                
                 // Migrate last selected location from localStorage
                 const oldLastLocation = localStorage.getItem('lastSelectedLocation');
                 if (oldLastLocation) {
@@ -354,14 +365,12 @@ function openDatabase() {
                     console.log('Removed old lastSelectedLocation from localStorage.');
                 }
 
-                // Migrate theme from localStorage (separately, as it might not have been in prayerTimeSettings)
+                // Migrate theme from localStorage
                 const oldTheme = localStorage.getItem('theme');
                 if (oldTheme) {
                     settingsStore.put({ name: 'theme', value: oldTheme });
                     console.log('Migrated theme from localStorage.');
-                    // Keeping localStorage.removeItem('theme') here for the theme key specifically,
-                    // in case it was stored independently before.
-                    localStorage.removeItem('theme');
+                    localStorage.removeItem('theme'); // Clean up old localStorage entry
                     console.log('Removed old theme from localStorage.');
                 }
                 // ------------------------------------------------------------------------
@@ -476,12 +485,14 @@ async function getPrayerTimesForYear(locationCode, year) {
 }
 
 /**
- * Saves a sync record to IndexedDB. (NEW)
+ * Saves a sync record to IndexedDB. (UPDATED)
  * @param {string} locationCode - The JAKIM zone code.
  * @param {string} syncMethod - 'MANUAL' or 'AUTO'.
+ * @param {string} status - "Successful" or "Failed".
+ * @param {string|object|null} apiResult - The API response or error message for failed syncs.
  * @returns {Promise<void>}
  */
-async function addSyncRecord(locationCode, syncMethod) {
+async function addSyncRecord(locationCode, syncMethod, status, apiResult = null) {
     try {
         const transaction = db.transaction([SYNC_HISTORY_STORE_NAME], 'readwrite');
         const store = transaction.objectStore(SYNC_HISTORY_STORE_NAME);
@@ -490,7 +501,9 @@ async function addSyncRecord(locationCode, syncMethod) {
             zoneCode: locationCode,
             zoneName: JAKIM_ZONES.find(z => z.code === locationCode)?.name || locationCode,
             syncTime: syncTime.toISOString(), // Store as ISO string for easy sorting
-            method: syncMethod
+            method: syncMethod,
+            status: status, // "Successful" or "Failed"
+            apiResult: apiResult // API response or error string for failed syncs
         };
 
         await new Promise((resolve, reject) => {
@@ -498,15 +511,15 @@ async function addSyncRecord(locationCode, syncMethod) {
             request.onsuccess = () => resolve();
             request.onerror = () => reject(request.error);
         });
-        console.log(`Sync record added: ${record.zoneName} (${record.method}) at ${syncTime.toLocaleString()}`);
-        await cleanupSyncHistory(); // Keep only latest 10
+        console.log(`Sync record added: ${record.zoneName} (${record.method}) - Status: ${status}`);
+        await cleanupSyncHistory(); // Keep only latest 15 records (updated limit)
     } catch (error) {
         console.error('Error adding sync record:', error);
     }
 }
 
 /**
- * Retrieves and displays sync history. (NEW)
+ * Retrieves and displays sync history. (UPDATED)
  */
 async function displaySyncHistory() {
     syncHistoryList.innerHTML = ''; // Clear existing list
@@ -524,20 +537,53 @@ async function displaySyncHistory() {
             return;
         }
 
-        // Sort by syncTime in descending order (most recent first)
-        allRecords.sort((a, b) => new Date(b.syncTime).getTime() - new Date(a.syncTime).getTime());
+        // Apply sorting based on selected option
+        const sortBy = syncHistorySortSelect.value;
+        if (sortBy === 'latest') {
+            allRecords.sort((a, b) => new Date(b.syncTime).getTime() - new Date(a.syncTime).getTime());
+        } else if (sortBy === 'status') {
+            allRecords.sort((a, b) => {
+                // Sort "Failed" status first, then "Successful"
+                if (a.status === 'Failed' && b.status === 'Successful') return -1;
+                if (a.status === 'Successful' && b.status === 'Failed') return 1;
+                // For same status, sort by latest time
+                return new Date(b.syncTime).getTime() - new Date(a.syncTime).getTime();
+            });
+        }
 
-        // Display latest 10 syncs
-        const displayRecords = allRecords.slice(0, 10);
-
-        displayRecords.forEach(record => {
+        allRecords.forEach((record, index) => {
             const listItem = document.createElement('li');
-            listItem.className = 'list-group-item';
+            // Add Bootstrap classes for list items and dynamic text color
+            listItem.className = `list-group-item d-flex flex-column ${record.status === 'Successful' ? 'text-success' : 'text-danger'}`;
+
             const syncDate = new Date(record.syncTime);
+            const formattedDate = syncDate.toLocaleString();
+            const collapseId = `syncDetailCollapse${index}`; // Unique ID for each collapsible element
+
+            let detailHtml = '';
+            if (record.status === 'Failed' && record.apiResult) {
+                // Ensure apiResult is a string for pre tag
+                const apiResultStr = typeof record.apiResult === 'object' ? JSON.stringify(record.apiResult, null, 2) : String(record.apiResult);
+                detailHtml = `
+                    <div class="d-flex align-items-center mt-2">
+                        <button class="btn btn-sm collapse-toggle-btn" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="false" aria-controls="${collapseId}">
+                            Details <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </div>
+                    <div class="collapse sync-detail-content" id="${collapseId}">
+                        <pre>${apiResultStr}</pre>
+                    </div>
+                `;
+            }
+
             listItem.innerHTML = `
-                <strong>Zone:</strong> ${record.zoneName}<br>
-                <strong>Last Sync:</strong> ${syncDate.toLocaleString()}<br>
-                <strong>Sync Method:</strong> ${record.method}
+                <div>
+                    <strong>Zone:</strong> ${record.zoneName}<br>
+                    <strong>Last Sync:</strong> ${formattedDate}<br>
+                    <strong>Method:</strong> ${record.method}<br>
+                    <strong>Status:</strong> <span class="fw-bold">${record.status}</span>
+                </div>
+                ${detailHtml}
             `;
             syncHistoryList.appendChild(listItem);
         });
@@ -548,7 +594,7 @@ async function displaySyncHistory() {
 }
 
 /**
- * Cleans up old sync history records, keeping only the latest 10. (NEW)
+ * Cleans up old sync history records, keeping only the latest 15. (UPDATED)
  */
 async function cleanupSyncHistory() {
     try {
@@ -561,12 +607,15 @@ async function cleanupSyncHistory() {
             request.onerror = () => reject(request.error);
         });
 
-        if (allRecords.length > 10) {
+        // Current limit is 15
+        const historyLimit = 15;
+
+        if (allRecords.length > historyLimit) {
             // Sort by syncTime in ascending order (oldest first)
             allRecords.sort((a, b) => new Date(a.syncTime).getTime() - new Date(b.syncTime).getTime());
-
-            // Delete oldest records until only 10 remain
-            for (let i = 0; i < allRecords.length - 10; i++) {
+            
+            // Delete oldest records until only 'historyLimit' remain
+            for (let i = 0; i < allRecords.length - historyLimit; i++) {
                 // Delete by id (keyPath)
                 await new Promise((resolve, reject) => {
                     const deleteRequest = store.delete(allRecords[i].id);
@@ -574,7 +623,7 @@ async function cleanupSyncHistory() {
                     deleteRequest.onerror = () => reject(deleteRequest.error);
                 });
             }
-            console.log(`Cleaned up sync history, now keeping 10 records.`);
+            console.log(`Cleaned up sync history, now keeping ${historyLimit} records.`);
         }
     } catch (error) {
         console.error('Error cleaning up sync history:', error);
@@ -624,7 +673,8 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
     showLoading(true);
     const currentYear = new Date().getFullYear();
     let allPrayerTimes = [];
-    let failedMonths = []; // Define failedMonths here
+    let fetchStatus = "Failed"; // Default status
+    let apiResultForHistory = null;
 
     // Clear existing data for the selected location and year before syncing
     try {
@@ -642,13 +692,15 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
     }
 
     try {
+        let successfulMonthsCount = 0;
+        let failedMonths = [];
+
         for (let month = 1; month <= 12; month++) {
             const monthlyData = await fetchPrayerTimesForMonth(locationCode, currentYear, month);
             if (monthlyData.length > 0) {
                 allPrayerTimes = allPrayerTimes.concat(monthlyData);
+                successfulMonthsCount++;
             } else {
-                // If any month fails to return data, consider the overall fetch for the year incomplete
-                // but still process whatever data was retrieved.
                 failedMonths.push(month);
             }
         }
@@ -665,12 +717,10 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
             });
 
             await savePrayerTimes(locationCode, currentYear, allPrayerTimes);
-            await addSyncRecord(locationCode, syncMethod); // Add record to history (NEW)
-
-            // Update lastAutoSync only if it was an auto sync
-            if (syncMethod === 'AUTO') {
-                autoSyncSettings.lastAutoSync = Date.now();
-                await saveSetting('autoSync', autoSyncSettings); // Save auto sync settings to IndexedDB
+            
+            fetchStatus = "Successful"; // At least some data was retrieved and saved
+            if (failedMonths.length > 0) {
+                 apiResultForHistory = `Warning: Data for month(s) ${failedMonths.join(', ')} could not be fetched or was empty.`;
             }
 
             let message = `Prayer times for ${JAKIM_ZONES.find(z => z.code === locationCode).name} for ${currentYear} have been synchronized successfully.`;
@@ -680,14 +730,18 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod) {
             showMessage('Sync Complete', message);
             displayPrayerTimes(locationCode, currentYear); // Re-display after sync
         } else {
-            // Mark as not successful if no data was retrieved at all
-            showMessage('Sync Failed', 'Could not fetch any prayer times for the selected location and year. The API might not have data available for the current year yet, or there was an issue with the fetch. Please try again later.');
+            fetchStatus = "Failed"; // No data at all
+            apiResultForHistory = "Could not fetch any prayer times for the selected location and year. The API might not have data available for the current year yet, or there was an issue with the fetch. Please try again later.";
+            showMessage('Sync Failed', apiResultForHistory);
         }
 
     } catch (error) {
+        fetchStatus = "Failed";
+        apiResultForHistory = `An error occurred during synchronization: ${error.message}. Please check your internet connection and try again.`;
         console.error('Error during full year sync:', error);
-        showMessage('Error', `An error occurred during synchronization: ${error.message}. Please check your internet connection and try again.`);
+        showMessage('Error', apiResultForHistory);
     } finally {
+        await addSyncRecord(locationCode, syncMethod, fetchStatus, apiResultForHistory); // Add record at the end
         showLoading(false);
     }
 }
@@ -747,7 +801,7 @@ function formatHijriDate(hijriDateStr) {
         'Muharram', 'Safar', 'Rabi\' al-Awwal', 'Rabi\' al-Thani', 'Jumada al-Ula', 'Jumada al-Thani',
         'Rajab', 'Sha\'ban', 'Ramadan', 'Shawwal', 'Dhul-Qa\'dah', 'Dhul-Hijjah'
     ];
-
+    
     // Adjust monthNum to be 0-indexed for array lookup
     const monthName = hijriMonthNames[monthNum - 1] || '';
 
@@ -784,7 +838,7 @@ function calculateIqamaTime(prayerTimeStr, offsetMinutes) {
 async function displayPrayerTimes(locationCode, year) {
     prayerTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Loading today\'s prayer times...</td></tr>';
     iqamaTimesTableBody.innerHTML = '<tr><td colspan="8" class="text-center">Loading Iqama times...</td></tr>';
-
+    
     // Clear previous countdown if any
     if (nextPrayerTimeout) {
         clearTimeout(nextPrayerTimeout);
@@ -964,9 +1018,9 @@ function startPrayerAnnouncement(prayerNameKey, prayerTimeStr, zoneName) {
     // After 30 seconds, transition to Iqama Countdown
     nextPrayerTimeout = setTimeout(() => {
         if (activePrayerDetails) {
-            // Pass a simulated duration for Iqama Countdown if debug mode is enabled
+            // Pass a simulated duration for Iqama Countdown (30 seconds) if debug mode is enabled
             if (debugModeEnabled) {
-                startIqamaCountdown(30); // Simulate 30 seconds for Iqama countdown after announcement
+                startIqamaCountdown(30);
             } else {
                 startIqamaCountdown(); // Normal flow: use actual Iqama time
             }
@@ -1028,7 +1082,7 @@ function startIqamaCountdown(simulatedDurationSeconds = null) {
             startPostIqamaMessage();
         } else {
             const totalSeconds = Math.floor(diffMs / 1000);
-
+            
             // Apply colors based on remaining time
             iqamaCountdown.classList.remove('text-success', 'text-warning-custom', 'text-danger-custom'); // Clear all first
             if (totalSeconds <= 15) {
@@ -1059,7 +1113,7 @@ function startPostIqamaMessage() {
     if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval); // Ensure Iqama interval is cleared
 
     showDisplay('postIqamaMessage');
-
+    
     // After 30 seconds, return to Main Display
     nextPrayerTimeout = setTimeout(() => {
         returnToMainDisplay();
@@ -1111,7 +1165,7 @@ function updateClockAndPrayerStatus() {
     }
 
     const currentZoneName = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || 'N/A';
-
+    
     let allEventsForToday = [];
 
     // Combine all standard prayer times for general next prayer calculation
@@ -1140,7 +1194,7 @@ function updateClockAndPrayerStatus() {
         if (prayerTimeStr && prayerTimeStr.trim() !== '--:--') {
             const [pHours, pMinutes] = prayerTimeStr.split(':').map(Number);
             const prayerDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0, 0);
-
+            
             // Allow a small window (e.g., first 59 seconds) to trigger the announcement
             const announcementWindowEnd = new Date(prayerDateTime.getTime() + 59 * 1000); // 59 seconds after prayer time
 
@@ -1180,7 +1234,7 @@ function updateClockAndPrayerStatus() {
             if (tomorrowFajrData && tomorrowFajrData.fajr && tomorrowFajrData.fajr.trim() !== '--:--') {
                 const [fHours, fMinutes] = tomorrowFajrData.fajr.split(':').map(Number);
                 const tomorrowFajrDateTime = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
-
+                
                 nextPrayerNameDisplay.textContent = `Next: Fajr (Tomorrow)`;
                 nextPrayerTimeDisplay.textContent = formatTime(tomorrowFajrData.fajr, false);
                 const diffMsTomorrow = tomorrowFajrDateTime.getTime() - now.getTime();
@@ -1242,16 +1296,14 @@ async function loadSettings() {
                 const oldSettings = JSON.parse(oldSettingsString);
                 if (oldSettings.iqamaOffsets) {
                     Object.assign(iqamaOffsets, oldSettings.iqamaOffsets);
-                    await saveSetting('iqamaOffsets', iqamaOffsets);
+                    // This data will be saved to IndexedDB by the migration logic in onupgradeneeded.
                 }
-                // The main IndexedDB upgrade logic handles removing localStorage items,
-                // so no need to remove here during a simple load.
             } catch (e) {
                 console.warn("Could not parse old localStorage settings for Iqama offsets during initial load.", e);
             }
         }
     }
-
+    
     // Load time format preference
     const loadedTimeFormat = await loadSetting('use24HourFormat');
     if (loadedTimeFormat !== undefined) {
@@ -1286,12 +1338,11 @@ async function loadSettings() {
     if (loadedTheme !== undefined) {
         setTheme(loadedTheme); // Apply the loaded theme
     } else {
-        // If theme not in IndexedDB, apply default (dark) or try localStorage for migration
+        // If theme not in IndexedDB, try localStorage for migration (if DB was not upgraded from v3)
         const initialLocalStorageTheme = localStorage.getItem('theme');
         if (initialLocalStorageTheme) {
             setTheme(initialLocalStorageTheme);
-            // Don't save to IndexedDB here, it will be saved on first theme switch
-            // The upgrade logic already handles the initial migration on DB upgrade.
+            // This will be saved to IndexedDB on the first theme switch after load.
         } else {
             setTheme('dark'); // Default theme if nothing is found anywhere
         }
@@ -1309,7 +1360,7 @@ async function saveAllSettings() {
     await saveSetting('debugModeEnabled', debugModeEnabled);
     await saveSetting('lastSelectedLocation', locationSelect.value);
     // Explicitly save the theme state based on the current switch
-    await saveSetting('theme', darkModeSwitch.checked ? 'dark' : 'light');
+    await saveSetting('theme', darkModeSwitch.checked ? 'dark' : 'light'); 
     console.log("All settings saved to IndexedDB.");
 }
 
@@ -1333,7 +1384,7 @@ function handleIqamaInputChange(event) {
     const prayerKey = input.dataset.prayer;
     const value = parseInt(input.value, 10);
 
-    if (!isNaN(value) && value >= 0 && value <= 60) {
+    if (!isNaN(value) && value >= 0 && value >= 0 && value <= 60) { // Fixed: Changed second '>=' to '<=' for max value
         iqamaOffsets[prayerKey] = value;
         saveAllSettings(); // Save all settings
         // Re-display prayer times to update Iqama row and next prayer countdown
@@ -1370,7 +1421,7 @@ async function checkAndRunAutoSync() {
     }
 
     const [scheduledHours, scheduledMinutes] = autoSyncSettings.time.split(':').map(Number);
-
+    
     // Calculate next possible sync time from NOW, considering the frequency
     let nextPossibleSync = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
 
@@ -1378,7 +1429,7 @@ async function checkAndRunAutoSync() {
     if (nextPossibleSync < now) {
         nextPossibleSync.setDate(nextPossibleSync.getDate() + 1);
     }
-
+    
     // Adjust to the specific day of the week for weekly/bi-weekly
     if (autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') {
         const daysToAdd = (autoSyncSettings.day - nextPossibleSync.getDay() + 7) % 7;
@@ -1414,7 +1465,7 @@ async function checkAndRunAutoSync() {
             if ((currentYear * 12 + currentMonth) > (lastSyncYear * 12 + lastSyncMonth)) {
                 // Now check if current time passed the scheduled time for the month that should trigger sync
                 const lastSyncScheduledDateTime = new Date(lastSyncTime.getFullYear(), lastSyncTime.getMonth(), lastSyncTime.getDate(), scheduledHours, scheduledMinutes, 0, 0);
-
+                
                 let nextExpectedMonthlySync = new Date(lastSyncTime);
                 nextExpectedMonthlySync.setMonth(nextExpectedMonthlySync.getMonth() + 1);
                 nextExpectedMonthlySync.setHours(scheduledHours, scheduledMinutes, 0, 0);
@@ -1430,7 +1481,7 @@ async function checkAndRunAutoSync() {
                 syncDue = false; // Still within the same month as last sync or earlier
             }
         }
-
+        
         // For weekly/bi-weekly, check if the interval has passed
         if ((autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') && intervalMs > 0) {
             if (now.getTime() - lastSyncTime.getTime() >= intervalMs && now.getTime() >= nextPossibleSync.getTime()) {
@@ -1479,11 +1530,11 @@ function simulatePrayerAnnouncementAction(prayerKey) {
     }
 
     // Temporarily reset the announced status for this prayer for testing
-    announcedPrayersToday[prayerKey] = false;
+    announcedPrayersToday[prayerKey] = false; 
 
     const prayerTimeStr = todayPrayerDataGlobal[prayerKey];
     const currentZoneName = JAKIM_ZONES.find(z => z.code === locationSelect.value)?.name || 'N/A';
-
+    
     console.log(`Simulating announcement for ${prayerKey}...`);
     startPrayerAnnouncement(prayerKey, formatTime(prayerTimeStr, false), currentZoneName);
 }
@@ -1525,7 +1576,7 @@ function simulateIqamaCountdownAction(prayerKey, durationSeconds = 45) {
         // For simulation, startIqamaCountdown uses `simulatedDurationSeconds`.
         iqamaTime: calculateIqamaTime(todayPrayerDataGlobal[prayerKey], iqamaOffsets[prayerKey])
     };
-
+    
     console.log(`Simulating Iqama Countdown for ${prayerKey} for ${durationSeconds} seconds...`);
     startIqamaCountdown(durationSeconds); // Pass the duration for simulation
 }
@@ -1541,6 +1592,45 @@ function simulatePostIqamaMessageAction() {
     console.log("Simulating Post-Iqama Message...");
     startPostIqamaMessage();
 }
+
+/**
+ * Simulates an API Sync event and adds it to history. (NEW)
+ * @param {boolean} isSuccess - True for a successful sync, false for a failed one.
+ */
+async function simulateApiSyncAction(isSuccess) {
+    if (!debugModeEnabled) {
+        showMessage("Debug Mode Off", "Please enable Debug Mode in settings to use simulation functions.");
+        return;
+    }
+    const currentZoneCode = locationSelect.value;
+    const currentZoneName = JAKIM_ZONES.find(z => z.code === currentZoneCode)?.name || 'Unknown Zone';
+    const syncMethod = 'MANUAL (Simulated)';
+    let status;
+    let apiResult = null;
+
+    if (isSuccess) {
+        status = 'Successful';
+        showMessage('Simulated Sync', `Simulated successful API sync for ${currentZoneName}.`);
+    } else {
+        status = 'Failed';
+        // Mock a detailed error message for simulation
+        apiResult = {
+            error: "Simulated API Error",
+            message: "The simulated API call encountered an issue. Possible causes: network problem, invalid zone code, or API server is down.",
+            details: {
+                statusCode: 500,
+                errorCode: "SIM_ERR_001",
+                timestamp: new Date().toISOString()
+            },
+            requestUrl: `${API_BASE_URL}&zone=${currentZoneCode}&period=month&year=${new Date().getFullYear()}&month=1`
+        };
+        showMessage('Simulated Sync', `Simulated failed API sync for ${currentZoneName}. Check sync history for details.`);
+    }
+
+    await addSyncRecord(currentZoneCode, syncMethod, status, apiResult);
+    displaySyncHistory(); // Refresh the sync history modal if open
+}
+
 
 /**
  * Returns the display to the Main Display. (NEW, used by UI)
@@ -1581,10 +1671,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Attempt to apply theme from localStorage immediately for quick visual load
     // This is temporary until IndexedDB is fully loaded.
     const initialLocalStorageTheme = localStorage.getItem('theme');
-    if (initialLocalStorageTheme) {
-        setTheme(initialLocalStorageTheme);
+    if (initialLocalStorageTheme === 'light') { // Check for 'light' explicitly
+        setTheme('light');
     } else {
-        setTheme('dark'); // Default if nothing in localStorage
+        setTheme('dark'); // Default to dark mode or if 'dark' was saved
     }
 
     // Open IndexedDB first
@@ -1672,6 +1762,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Event listener for showing Sync History modal (NEW)
     document.getElementById('syncHistoryModal').addEventListener('show.bs.modal', displaySyncHistory);
+    syncHistorySortSelect.addEventListener('change', displaySyncHistory); // Re-display history when sort changes
 
 
     // Debug Mode Switch Listener (NEW)
@@ -1680,13 +1771,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         await saveAllSettings();
         toggleDebugButtonsVisibility();
         // If debug mode is enabled, ensure main display updates its next prayer logic without triggering real announcements
-        updateClockAndPrayerStatus();
+        updateClockAndPrayerStatus(); 
     });
 
     // Debug Button Listeners (NEW)
     simPrayerAnnounceBtn.addEventListener('click', () => simulatePrayerAnnouncementAction(simPrayerSelect.value));
     simIqamaCountdownBtn.addEventListener('click', () => simulateIqamaCountdownAction(simPrayerSelect.value, parseInt(simIqamaDurationInput.value, 10)));
     simPostIqamaBtn.addEventListener('click', simulatePostIqamaMessageAction);
+    simApiSyncSuccessBtn.addEventListener('click', () => simulateApiSyncAction(true)); // Simulate success
+    simApiSyncFailBtn.addEventListener('click', () => simulateApiSyncAction(false));   // Simulate failure
     returnToMainBtn.addEventListener('click', returnToMainAction);
     resetAnnouncedPrayersBtn.addEventListener('click', resetAnnouncedPrayersAction);
 
