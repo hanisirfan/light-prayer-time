@@ -122,10 +122,10 @@ const announcementZoneName = document.getElementById('announcementZoneName');
 
 // Iqama Countdown Display Elements
 const iqamaCountdownDisplay = document.getElementById('iqamaCountdownDisplay');
-const iqamaPrayerName = document.getElementById('iqamaPrayerName');
-const iqamaPrayerTime = document.getElementById('iqamaPrayerTime');
+const iqamaPrayerName = document.getElementById('iqamaPrayerName'); // Now h2, bold
+const iqamaPrayerTime = document.getElementById('iqamaPrayerTime'); // Now h3, muted
 const iqamaCountdown = document.getElementById('iqamaCountdown');
-const iqamaZoneName = document.getElementById('iqamaZoneName');
+const iqamaZoneName = document.getElementById('iqamaZoneName'); // Now h4, secondary
 
 // Post-Iqama Message Display Elements
 const postIqamaMessageDisplay = document.getElementById('postIqamaMessageDisplay');
@@ -1136,6 +1136,7 @@ function startIqamaCountdown(simulatedDurationSeconds = null) {
         return;
     }
 
+    // Populate the new elements based on activePrayerDetails
     iqamaPrayerName.textContent = activePrayerDetails.name.toUpperCase();
     iqamaPrayerTime.textContent = activePrayerDetails.time;
     iqamaZoneName.textContent = activePrayerDetails.zone;
@@ -1150,6 +1151,7 @@ function startIqamaCountdown(simulatedDurationSeconds = null) {
         console.log(`Simulating Iqama Countdown for ${simulatedDurationSeconds} seconds.`);
     } else {
         // For actual prayer, use the calculated Iqama time
+        // Need to parse activePrayerDetails.iqamaTime (which is already formatted HH:MM)
         const [iqamaHours, iqamaMinutes] = activePrayerDetails.iqamaTime.split(':').map(Number);
         iqamaTargetDateTime = new Date();
         iqamaTargetDateTime.setHours(iqamaHours, iqamaMinutes, 0, 0);

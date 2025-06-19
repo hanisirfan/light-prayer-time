@@ -51,7 +51,7 @@ body.dark-mode {
 }
 
 body {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Poppins', sans-serif; /* Changed font to Poppins */
     background-color: var(--body-bg);
     min-height: 100vh; /* Ensure body covers full viewport height */
     display: flex; /* Use flexbox for vertical layout of sections */
@@ -85,7 +85,6 @@ body {
 /* New Display Section styling */
 .display-section {
     width: 100%;
-    /* Removed padding: 2rem 1rem; */
     background-color: var(--display-section-bg);
     transition: background-color 0.3s ease;
     display: flex; /* Use flex for content alignment */
@@ -150,6 +149,12 @@ body {
     font-size: 1.2rem; /* ZONE_NAME */
 }
 
+/* Added bold weight to Iqama in: text */
+.iqama-in-text {
+    font-weight: bold !important;
+}
+
+
 #postIqamaMessageDisplay .display-4 {
     font-size: 2.5rem; /* "Straighten your rows..." */
 }
@@ -161,11 +166,25 @@ body {
     font-style: italic;
 }
 
+/* New: Styles for countdown containers and subtitles */
+.countdown-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 0.5rem; /* Adjust spacing as needed */
+}
+
+.countdown-subtitle {
+    font-size: 1rem; /* Increased font size for subtitle */
+    margin-top: -0.8rem; /* Pull subtitle closer to the numbers */
+    opacity: 1; /* Opacity to 1 */
+}
+
 
 /* New Prayer Table Section styling */
 .prayer-table-section {
     width: 100%;
-    /* Removed padding-top: 1rem; padding-bottom: 1rem; */
     background-color: var(--table-section-bg);
     border-top: 1px solid var(--border-color); /* Separator line between sections */
     transition: background-color 0.3s ease, border-color 0.3s ease;
@@ -174,22 +193,20 @@ body {
     justify-content: flex-start; /* Align table to top of section */
     align-items: stretch; /* Stretch table container to full width */
     flex-grow: 1; /* Allow this section to take remaining vertical space */
-    /* No min-height here, it will naturally take what's left after display-section */
 }
 
 /* Table container styling - now just for the p-3 border */
-.table-container { /* Renamed for clarity, removed rounded-3 */
-    border-radius: 0; /* Remove rounded corners */
-    padding: 1rem; /* Internal padding for table */
+.table-container {
+    border-radius: 0;
+    padding: 1rem;
     transition: background-color 0.3s ease, border-color 0.3s ease;
-    width: 100%; /* Ensure it always takes full width of its parent */
+    width: 100%;
 }
 
 /* Mosque Name Display Styling */
 #mosqueNameDisplay {
-    font-weight: bold; /* Make mosque name bold */
-    margin-top: 0.5rem; /* Adjust as needed for spacing */
-    color: var(--text-color) !important; /* Ensure visibility in both themes */
+    font-style: oblique; /* Added oblique font style */
+    color: var(--text-color) !important;
 }
 
 
@@ -225,19 +242,19 @@ body {
 }
 
 .form-select {
-    background-color: var(--offcanvas-bg); /* Use offcanvas bg for consistent styling */
+    background-color: var(--offcanvas-bg);
     color: var(--text-color);
     border-color: var(--border-color);
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
 .form-select option {
-    background-color: var(--offcanvas-bg); /* For dropdown options */
+    background-color: var(--offcanvas-bg);
     color: var(--text-color);
 }
 
 .form-control {
-    background-color: var(--offcanvas-bg); /* Consistent with select */
+    background-color: var(--offcanvas-bg);
     color: var(--text-color);
     border-color: var(--border-color);
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
@@ -245,19 +262,19 @@ body {
 
 /* Placeholder styling for form controls */
 .form-control::placeholder {
-  color: var(--input-placeholder-color); /* Use the new variable for placeholder color */
-  opacity: 1; /* Ensure placeholder is not transparent */
+  color: var(--input-placeholder-color);
+  opacity: 1;
 }
 body.dark-mode .form-control::placeholder {
-  color: var(--input-placeholder-color); /* Ensure specific color for dark mode */
+  color: var(--input-placeholder-color);
 }
 
 
 .form-control:focus {
-    background-color: var(--offcanvas-bg); /* Maintain background on focus */
+    background-color: var(--offcanvas-bg);
     color: var(--text-color);
     border-color: var(--heading-color);
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25); /* Bootstrap primary shadow */
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
 }
 
 .btn-primary {
@@ -272,14 +289,12 @@ body.dark-mode .form-control::placeholder {
     transition: all 0.3s ease;
 }
 
-.btn-warning { /* For debug buttons */
+.btn-warning {
     --bs-btn-bg: #ffc107;
     --bs-btn-border-color: #ffc107;
     --bs-btn-hover-bg: #e0a800;
     --bs-btn-hover-border-color: #d39e00;
-    --bs-btn-active-bg: #c69500;
-    --bs-btn-active-border-color: #b98b00;
-    color: #212529; /* Ensure text is dark on yellow */
+    color: #212529;
     transition: all 0.3s ease;
 }
 
@@ -295,7 +310,7 @@ body.dark-mode .btn-warning {
 
 
 .offcanvas {
-    background-color: var(--offcanvas-bg); /* Use new variable for offcanvas */
+    background-color: var(--offcanvas-bg);
     color: var(--text-color);
     transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -324,10 +339,10 @@ body.dark-mode .btn-warning {
 /* Specific styling for the prayer times table */
 .table {
     width: 100%;
-    table-layout: fixed; /* Keep fixed layout for consistent column widths */
-    border-color: var(--border-color); /* Table borders */
+    table-layout: fixed;
+    border-color: var(--border-color);
     transition: all 0.3s ease;
-    border-collapse: collapse; /* Ensure borders collapse nicely */
+    border-collapse: collapse;
 }
 
 .table thead th {
@@ -335,14 +350,14 @@ body.dark-mode .btn-warning {
     color: var(--table-header-color) !important;
     vertical-align: middle;
     padding: 0.75rem;
-    font-size: 0.9rem; /* Default font size for smaller screens */
+    font-size: 1.7rem; /* Increased font size */
     border-bottom: 2px solid var(--table-header-bg);
     text-align: center;
     transition: background-color 0.3s ease, color 0.3s ease;
-    border-right: 1px solid rgba(255, 255, 255, 0.1); /* Slight separator for headers */
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 .table thead th:last-child {
-    border-right: none; /* No border on last header */
+    border-right: none;
 }
 
 /* Table body and footer cells */
@@ -350,17 +365,17 @@ body.dark-mode .btn-warning {
 .table tfoot td {
     vertical-align: middle;
     padding: 0.75rem;
-    font-size: 1.1rem; /* Default font size for smaller screens */
+    font-size: 1.7rem; /* Increased font size */
     font-weight: 700;
     text-align: center;
-    border-top: 1px solid var(--border-color); /* Maintain consistent border */
-    border-right: 1px solid var(--border-color); /* Vertical cell separator */
-    color: var(--text-color); /* Explicitly set text color for table cells */
+    border-top: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    color: var(--text-color);
     transition: color 0.3s ease, border-color 0.3s ease;
 }
 .table tbody td:last-child,
 .table tfoot td:last-child {
-    border-right: none; /* No border on last column */
+    border-right: none;
 }
 
 
@@ -371,14 +386,14 @@ body.dark-mode .btn-warning {
 }
 
 .table tbody tr:nth-of-type(even) {
-    background-color: var(--table-even-row-bg); /* Use new variable for even rows */
+    background-color: var(--table-even-row-bg);
 }
 
 /* Ensure Iqama row matches the even row styling to avoid stripe conflict */
 .table tfoot tr {
-    background-color: var(--table-even-row-bg) !important; /* Make Iqama row match even rows */
-    font-weight: bold; /* Keep bold text */
-    border-top: 2px solid var(--border-color); /* Keep thicker border top */
+    background-color: var(--table-even-row-bg) !important;
+    font-weight: bold;
+    border-top: 2px solid var(--border-color);
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
@@ -389,8 +404,8 @@ body.dark-mode .btn-warning {
 
 /* Highlight for current day */
 .highlight-today {
-    background-color: var(--heading-color) !important; /* Uses primary blue */
-    color: white !important; /* White text for contrast */
+    background-color: var(--heading-color) !important;
+    color: white !important;
     font-weight: bold;
 }
 
@@ -416,7 +431,7 @@ body.dark-mode .btn-warning {
 }
 
 #selectedLocationDisplay {
-    margin-top: 0.5rem; /* Keep some margin below location display */
+    margin-top: 0.5rem;
     font-weight: bold;
     color: var(--heading-color);
     font-size: 1.5rem;
@@ -427,23 +442,43 @@ body.dark-mode .btn-warning {
     background-color: var(--prayer-status-box-bg);
     border: 1px solid var(--border-color);
     transition: background-color 0.3s ease, border-color 0.3s ease;
-    max-width: 350px; /* Keep a max-width for this central box */
-    width: 80%; /* Add width for better responsiveness on larger screens */
-    margin-top: 1rem; /* Added padding to separate from elements above */
-    margin-bottom: 1rem; /* Added padding to separate from elements below */
-    padding: 1rem; /* Internal padding for its content */
-    border-radius: 0.5rem; /* Keep slight rounding for this internal box */
+    max-width: 350px;
+    width: 80%;
+    /* Adjusted margins */
+    margin-top: 1.5rem; /* Increased top margin */
+    margin-bottom: 1.5rem; /* Increased bottom margin */
+    padding: 1.5rem; /* Increased internal padding */
+    border-radius: 0.5rem;
+    display: flex; /* Use flexbox for internal layout */
+    flex-direction: column; /* Stack items vertically */
+    align-items: center; /* Center items horizontally */
 }
+
+/* Specific margins for elements within prayer-status-box */
+.prayer-status-box p {
+    margin-bottom: 0.5rem; /* Default spacing */
+}
+
+/* More specific adjustments for next prayer status elements */
+.prayer-status-box #nextPrayerName {
+    margin-bottom: 0.5rem; /* Space below Next Prayer name */
+}
+
+.next-prayer-time-display {
+    font-size: 1.75rem !important; /* Increased font size for nextPrayerTime */
+    margin-bottom: 0.75rem; /* Space below next prayer time */
+}
+
+.prayer-status-box .countdown-container {
+    margin-top: 0.75rem; /* Space between time and countdown */
+}
+
 
 #nextPrayerName {
     color: var(--text-color);
     transition: color 0.3s ease;
 }
 
-#nextPrayerTime {
-    color: var(--muted-text-color);
-    transition: color 0.3s ease;
-}
 
 #countdownToNextPrayer {
     color: var(--next-prayer-countdown-color);
@@ -460,7 +495,7 @@ body.dark-mode .btn-warning {
 
 /* Specific style for collapsed content */
 .sync-detail-content {
-    background-color: rgba(0, 0, 0, 0.05); /* Slightly darker bg for content */
+    background-color: rgba(0, 0, 0, 0.05);
     border-top: 1px solid var(--border-color);
     padding: 0.5rem;
     margin-top: 0.5rem;
@@ -468,10 +503,10 @@ body.dark-mode .btn-warning {
 }
 
 .sync-detail-content pre {
-    white-space: pre-wrap; /* Ensure text wraps */
-    word-break: break-word; /* Break long words */
+    white-space: pre-wrap;
+    word-break: break-word;
     font-size: 0.85em;
-    color: var(--text-color); /* Ensure text is readable */
+    color: var(--text-color);
     margin-bottom: 0;
 }
 
@@ -479,7 +514,7 @@ body.dark-mode .btn-warning {
 .collapse-toggle-btn {
     background: none;
     border: none;
-    color: var(--heading-color); /* Use primary color for the icon */
+    color: var(--heading-color);
     padding: 0;
     margin-left: 0.5rem;
     font-size: 0.9rem;
@@ -515,8 +550,8 @@ body.dark-mode .btn-warning {
     }
     #selectedLocationDisplay {
         font-size: 1.2rem;
-        max-width: 100%; /* Ensure it uses full width on mobile */
-        padding: 0 10px; /* Add some horizontal padding */
+        max-width: 100%;
+        padding: 0 10px;
     }
     .prayer-status-box p {
         font-size: 1rem !important;
@@ -524,19 +559,19 @@ body.dark-mode .btn-warning {
     .prayer-status-box #countdownToNextPrayer {
         font-size: 1.8rem !important;
     }
-    .table tbody td, .table tfoot td { /* Apply to tfoot td as well */
-        font-size: 0.85rem;
+    .table tbody td, .table tfoot td {
+        font-size: 1.2rem; /* Adjusted for mobile view */
         padding: 0.5rem;
     }
     .table thead th {
-        font-size: 0.7rem; /* Reduced font size for table headers on mobile */
-        padding: 0.4rem; /* Adjusted padding for table headers on mobile */
-        white-space: nowrap; /* Prevent wrapping of header text to ensure min-width works */
+        font-size: 1rem; /* Adjusted for mobile view */
+        padding: 0.4rem;
+        white-space: nowrap;
     }
 
     /* Force a minimum width on the table itself when in table-responsive container on small screens */
     .table-responsive > .table {
-        min-width: 650px; /* Adjust this value as needed to ensure scrolling. Typical phone width is 320-420px. */
+        min-width: 650px;
     }
     
     /* Ensure full width for sections on small screens and remove external padding */
@@ -546,36 +581,36 @@ body.dark-mode .btn-warning {
     }
     /* Specific padding for content within display section on mobile */
     .display-section {
-        padding-top: 1rem; /* Adjust top padding for mobile */
-        padding-bottom: 1rem; /* Adjust bottom padding for mobile */
+        padding-top: 1rem;
+        padding-bottom: 1rem;
     }
     .prayer-table-section {
-        padding-top: 0.5rem; /* Reduce top padding for prayer table section on mobile */
-        padding-bottom: 0.5rem; /* Reduce bottom padding for prayer table section on mobile */
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
     }
     .table-container {
-        padding: 0.5rem; /* Reduce inner padding for table container on mobile */
+        padding: 0.5rem;
     }
 
 }
 
 /* Desktop / Larger Screens Font Size for Table */
-@media (min-width: 992px) { /* Adjust breakpoint as needed (lg breakpoint in Bootstrap) */
+@media (min-width: 992px) {
     .table tbody td,
     .table tfoot td {
-        font-size: 1.3rem; /* Increased font size for desktop */
+        font-size: 1.7rem; /* Maintain requested font size for desktop */
     }
     .table thead th {
-        font-size: 1.3rem; /* Increased header font size for desktop */
+        font-size: 1.7rem; /* Maintain requested font size for desktop */
     }
 }
 
 
 /* Keep these modal stylings, they apply to all modals */
 .modal-content {
-    background-color: var(--offcanvas-bg); /* Use offcanvas bg for modals */
+    background-color: var(--offcanvas-bg);
     color: var(--text-color);
-    border-radius: 0.75rem; /* Keep slight rounding for modals */
+    border-radius: 0.75rem;
 }
 .modal-header {
     background-color: var(--table-header-bg) !important;
