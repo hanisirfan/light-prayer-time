@@ -228,11 +228,6 @@ function formatTime(timeStr, includeSeconds = false) {
         minute: '2-digit',
         hour12: !use24HourFormat // Set hour12 based on user preference
     };
-    if (includeSeconds) {
-        options.second = '2-digit';
-    }
-
-    // Explicitly format for 24-hour without AM/PM if use24HourFormat is true
     if (use24HourFormat) {
         let h = String(date.getHours()).padStart(2, '0');
         let m = String(date.getMinutes()).padStart(2, '0');
@@ -240,7 +235,6 @@ function formatTime(timeStr, includeSeconds = false) {
         return includeSeconds ? `${h}:${m}:${s}` : `${h}:${m}`;
     }
     
-    // Otherwise, use browser's locale-sensitive formatting for 12-hour
     return date.toLocaleTimeString([], options);
 }
 
@@ -756,7 +750,7 @@ async function fetchAndStoreAllPrayerTimes(locationCode, syncMethod, targetYear 
 
             let message = `Prayer times for ${JAKIM_ZONES.find(z => z.code === locationCode).name} for ${yearToSync} have been synchronized successfully.`;
             if (failedMonths.length > 0) {
-                message += `<br> <span class="text-warning">Warning: Could not fetch data for month(s): ${failedMonths.join(', ')}. The API might not have data for these months yet.</span>`;
+                message += `<br> <span class="text-warning">Warning: Could not fetch data for month(s): ${failedMonths.join(', ')}. The API might not have data available for these months yet.</span>`;
             }
             if (syncMethod !== 'AUTO_INITIAL') { // Don't show message for silent initial auto sync
                 showMessage('Sync Complete', message);
@@ -908,21 +902,7 @@ async function displayPrayerTimes(locationCode, year) {
             maghrib: false,
             isha: false
         };
-        // Reset lastAutoSync if it's a new day and auto sync is off (to re-trigger if needed)
-        // This part needs careful consideration if it's causing unwanted syncs.
-        // It should ONLY reset if auto sync is OFF and the day has truly changed and it was NOT a manual sync.
-        // For now, removing this condition from here as checkAndRunAutoSync handles its own lastAutoSync state.
-        /*
-        if (!autoSyncSettings.enabled && autoSyncSettings.lastAutoSync) {
-            const lastSyncDate = new Date(autoSyncSettings.lastAutoSync).toISOString().slice(0,10);
-            if (lastSyncDate !== todayFormattedForComparison) {
-                autoSyncSettings.lastAutoSync = null; // Forces a check next time auto sync is enabled/app loads
-                await saveSetting('autoSync', autoSyncSettings);
-            }
-        }
-        */
     }
-
 
     let todayData = null;
     let usedZoneCode = locationCode;
@@ -946,6 +926,11 @@ async function displayPrayerTimes(locationCode, year) {
         
         const allStoredPrayerTimes = await getAllStoredPrayerTimesData();
 
+        // Define tomorrowFormattedForComparison here
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        const tomorrowFormattedForComparison = tomorrow.toISOString().slice(0, 10);
+
         // Find a fallback from *any* stored zone data
         for (const storedData of allStoredPrayerTimes) {
             // Check if the stored data is for the current year
@@ -954,7 +939,7 @@ async function displayPrayerTimes(locationCode, year) {
                     const parts = dayData.date.split('-');
                     const monthNum = API_MONTH_MAP[parts[1]];
                     const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
-                    return apiDateFormatted === tomorrowFormattedForComparison;
+                    return apiDateFormatted === todayFormattedForComparison; // Check for TODAY's data first
                 });
 
                 if (foundDailyData) {
@@ -1337,7 +1322,7 @@ async function updateClockAndPrayerStatus() {
         tomorrow.setDate(now.getDate() + 1);
         // Ensure tomorrow's year is correct if it's Dec 31st
         const tomorrowYear = tomorrow.getFullYear();
-        const tomorrowFormattedForComparison = tomorrow.toISOString().slice(0, 10);
+        const tomorrowFormattedForComparison = tomorrow.toISOString().slice(0, 10); // Declared here
 
         const tomorrowDataAll = await getPrayerTimesForYear(locationSelect.value, tomorrowYear);
         let tomorrowFajrData = null;
@@ -1345,7 +1330,7 @@ async function updateClockAndPrayerStatus() {
         if (tomorrowDataAll && tomorrowDataAll.length > 0) {
             tomorrowFajrData = tomorrowDataAll.find(d => {
                 const parts = d.date.split('-');
-                const monthNum = API_MONTH_MAP[parts[1]]; // Use global map for month
+                const monthNum = API_MONTH_MAP[parts[1]];
                 const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
                 return apiDateFormatted === tomorrowFormattedForComparison;
             });
@@ -1862,6 +1847,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Populate locations dropdown and set last selected
     await populateLocationSelect();
+
+    // Check if it's the first time the app is visited (no lastSelectedLocation saved)
+    const isFirstVisit = (await loadSetting('lastSelectedLocation')) === undefined;
+    if (isFirstVisit) {
+        console.log("First visit detected. Saving default settings to IndexedDB.");
+        await saveAllSettings(); // Save all current default/loaded settings
+    }
 
     // Populate Iqama input fields with loaded/default offsets
     populateIqamaInputs();

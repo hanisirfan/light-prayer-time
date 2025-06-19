@@ -109,11 +109,6 @@ function formatTime(timeStr, includeSeconds = false) {
         minute: '2-digit',
         hour12: !use24HourFormat // Set hour12 based on user preference
     };
-    if (includeSeconds) {
-        options.second = '2-digit';
-    }
-
-    // Explicitly format for 24-hour without AM/PM if use24HourFormat is true
     if (use24HourFormat) {
         let h = String(date.getHours()).padStart(2, '0');
         let m = String(date.getMinutes()).padStart(2, '0');
@@ -220,38 +215,80 @@ async function getPrayerTimesForYear(locationCode, year) {
 }
 
 /**
- * Populates the zone select dropdown with JAKIM zones and loads last selected.
+ * Retrieves all unique zone codes that have synced data for the current year in IndexedDB.
+ * @returns {Promise<Set<string>>} A Set of synced zone codes.
+ */
+async function getSyncedZoneCodesForCurrentYear() {
+    const currentYear = new Date().getFullYear();
+    const syncedZoneCodes = new Set();
+    try {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const request = store.openCursor();
+
+        await new Promise((resolve, reject) => {
+            request.onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    const [zoneCode, year] = cursor.key.split('_');
+                    if (parseInt(year, 10) === currentYear) {
+                        syncedZoneCodes.add(zoneCode);
+                    }
+                    cursor.continue();
+                } else {
+                    resolve();
+                }
+            };
+            request.onerror = (event) => reject(event.target.error);
+        });
+    } catch (error) {
+        console.error('Error getting synced zone codes:', error);
+    }
+    return syncedZoneCodes;
+}
+
+
+/**
+ * Populates the zone select dropdown with JAKIM zones that have synced data.
  */
 async function populateZoneSelect() {
     zoneSelect.innerHTML = ''; // Clear existing options
     
-    // Add options for each JAKIM zone
-    JAKIM_ZONES.forEach(zone => {
-        const option = document.createElement('option');
-        option.value = zone.code;
-        option.textContent = zone.name;
-        zoneSelect.appendChild(option);
-    });
+    const syncedZoneCodes = await getSyncedZoneCodesForCurrentYear();
+    const availableZones = JAKIM_ZONES.filter(zone => syncedZoneCodes.has(zone.code));
 
-    // Add a special option for "Sync New Zone"
+    // If there are no synced zones, add a disabled default option
+    if (availableZones.length === 0) {
+        const noSyncedZonesOption = document.createElement('option');
+        noSyncedZonesOption.value = '';
+        noSyncedZonesOption.textContent = 'No zones synced. Please sync from main page.';
+        noSyncedZonesOption.disabled = true;
+        noSyncedZonesOption.selected = true;
+        zoneSelect.appendChild(noSyncedZonesOption);
+    } else {
+        // Add available synced zones
+        availableZones.forEach(zone => {
+            const option = document.createElement('option');
+            option.value = zone.code;
+            option.textContent = zone.name;
+            zoneSelect.appendChild(option);
+        });
+
+        // Load last selected location from settings
+        const savedLocation = await loadSetting('lastSelectedLocation');
+        if (savedLocation && syncedZoneCodes.has(savedLocation)) {
+            zoneSelect.value = savedLocation;
+        } else {
+            // Default to the first available synced zone
+            zoneSelect.value = availableZones[0].code;
+        }
+    }
+
+    // Add a special option for "Sync New Zone" always at the end
     const syncNewZoneOption = document.createElement('option');
     syncNewZoneOption.value = 'sync_new_zone';
     syncNewZoneOption.textContent = 'Sync New Zone (from Main Page)';
     zoneSelect.appendChild(syncNewZoneOption);
-
-    // Load last selected location from settings
-    const savedLocation = await loadSetting('lastSelectedLocation');
-    if (savedLocation && JAKIM_ZONES.some(zone => zone.code === savedLocation)) {
-        zoneSelect.value = savedLocation;
-    } else {
-        // Fallback to WLY01 if no saved location or invalid, or first zone if WLY01 not available
-        const defaultZone = 'WLY01';
-        if (JAKIM_ZONES.some(zone => zone.code === defaultZone)) {
-            zoneSelect.value = defaultZone;
-        } else {
-            zoneSelect.value = JAKIM_ZONES[0].code; // Fallback to the very first zone
-        }
-    }
 }
 
 /**
@@ -277,6 +314,13 @@ async function displayMonthlyPrayerTimes() {
 
     currentMonthYearDisplay.textContent = `${currentDisplayDate.toLocaleString('en-GB', { month: 'long', year: 'numeric' })}`;
 
+    // If "Sync New Zone" or no valid zone selected, show appropriate message
+    if (!selectedZoneCode || selectedZoneCode === 'sync_new_zone') {
+        monthlyPrayerTimesTableBody.innerHTML = `<tr><td colspan="10" class="text-center text-info py-4">Please select a synced zone or sync a new one from the main page.</td></tr>`;
+        return;
+    }
+
+
     const allPrayerTimesForYear = await getPrayerTimesForYear(selectedZoneCode, year);
 
     if (!allPrayerTimesForYear || allPrayerTimesForYear.length === 0) {
@@ -297,10 +341,6 @@ async function displayMonthlyPrayerTimes() {
 
     monthlyPrayerTimesTableBody.innerHTML = ''; // Clear loading message
 
-    const today = new Date();
-    // Format today's date to match API's YYYY-MM-DD for comparison
-    const todayFormattedForComparison = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-
     monthlyData.forEach(dayData => {
         const row = document.createElement('tr');
 
@@ -308,10 +348,7 @@ async function displayMonthlyPrayerTimes() {
         const parts = dayData.date.split('-');
         const apiDateAsDateObject = new Date(parts[2], parseInt(API_MONTH_MAP[parts[1]], 10) - 1, parts[0]);
         
-        // Remove .table-primary highlighting
-        // if (apiDateFormattedForComparison === todayFormattedForComparison) {
-        //     row.classList.add('table-primary'); // Highlight today's date using Bootstrap class
-        // }
+        // Removed .table-primary highlighting logic as per user request.
 
         row.innerHTML = `
             <td>${apiDateAsDateObject.toLocaleString('en-GB', { weekday: 'short' })}</td>
@@ -374,7 +411,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // To prevent the dropdown from permanently showing "Sync New Zone",
             // we re-populate the select and attempt to re-select the previously selected *valid* zone.
-            populateZoneSelect(); 
+            // This is handled better by simply redirecting and letting the main page handle itself.
+            // populateZoneSelect(); // No longer needed here if redirecting
         } else {
             displayMonthlyPrayerTimes();
         }
