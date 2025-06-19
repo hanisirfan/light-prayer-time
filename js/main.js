@@ -909,6 +909,10 @@ async function displayPrayerTimes(locationCode, year) {
             isha: false
         };
         // Reset lastAutoSync if it's a new day and auto sync is off (to re-trigger if needed)
+        // This part needs careful consideration if it's causing unwanted syncs.
+        // It should ONLY reset if auto sync is OFF and the day has truly changed and it was NOT a manual sync.
+        // For now, removing this condition from here as checkAndRunAutoSync handles its own lastAutoSync state.
+        /*
         if (!autoSyncSettings.enabled && autoSyncSettings.lastAutoSync) {
             const lastSyncDate = new Date(autoSyncSettings.lastAutoSync).toISOString().slice(0,10);
             if (lastSyncDate !== todayFormattedForComparison) {
@@ -916,6 +920,7 @@ async function displayPrayerTimes(locationCode, year) {
                 await saveSetting('autoSync', autoSyncSettings);
             }
         }
+        */
     }
 
 
@@ -949,7 +954,7 @@ async function displayPrayerTimes(locationCode, year) {
                     const parts = dayData.date.split('-');
                     const monthNum = API_MONTH_MAP[parts[1]];
                     const apiDateFormatted = `${parts[2]}-${monthNum}-${parts[0]}`;
-                    return apiDateFormatted === todayFormattedForComparison;
+                    return apiDateFormatted === tomorrowFormattedForComparison;
                 });
 
                 if (foundDailyData) {
@@ -1289,7 +1294,7 @@ async function updateClockAndPrayerStatus() {
             allEventsForToday.push({
                 name: PRAYER_NAMES_MAP[key],
                 nameKey: key, // Store key for announcement check
-                timeStr: formatTime(timeStr, false),
+                timeStr: formatTime(timeStr, false), // Use formatTime here for next prayer time display
                 dateTime: new Date(now.getFullYear(), now.getMonth(), now.getDate(), pHours, pMinutes, 0)
             });
         }
@@ -1351,7 +1356,7 @@ async function updateClockAndPrayerStatus() {
             const tomorrowFajrDateTime = new Date(tomorrowYear, tomorrow.getMonth(), tomorrow.getDate(), fHours, fMinutes, 0);
             
             nextPrayerNameDisplay.textContent = `Next: Fajr (Tomorrow)`;
-            nextPrayerTimeDisplay.textContent = formatTime(tomorrowFajrData.fajr, false);
+            nextPrayerTimeDisplay.textContent = formatTime(tomorrowFajrData.fajr, false); // Format using formatTime
             const diffMsTomorrow = tomorrowFajrDateTime.getTime() - now.getTime();
             const totalSecondsTomorrow = Math.floor(diffMsTomorrow / 1000);
             countdownToNextPrayerDisplay.textContent = formatCountdown(totalSecondsTomorrow);
@@ -1364,7 +1369,7 @@ async function updateClockAndPrayerStatus() {
     } else {
         // Update main display with next upcoming prayer
         nextPrayerNameDisplay.textContent = `Next: ${nextEventForMainDisplay.name}`;
-        nextPrayerTimeDisplay.textContent = nextEventForMainDisplay.timeStr;
+        nextPrayerTimeDisplay.textContent = nextEventForMainDisplay.timeStr; // Already formatted by formatTime
 
         const diffMs = nextEventForMainDisplay.dateTime.getTime() - now.getTime();
         const totalSeconds = Math.floor(diffMs / 1000);
@@ -1542,69 +1547,62 @@ async function checkAndRunAutoSync() {
 
     const [scheduledHours, scheduledMinutes] = autoSyncSettings.time.split(':').map(Number);
     
-    // Calculate next possible sync time from NOW, considering the frequency
-    let nextPossibleSync = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
-
-    // If today's scheduled time already passed, move to tomorrow for base calculation
-    if (nextPossibleSync < now) {
-        nextPossibleSync.setDate(nextPossibleSync.getDate() + 1);
+    // Calculate the most recent scheduled sync time that has passed or is current
+    let lastScheduledSyncPoint = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
+    if (lastScheduledSyncPoint > now) { // If today's scheduled time is in the future, consider yesterday's
+        lastScheduledSyncPoint.setDate(lastScheduledSyncPoint.getDate() - 1);
     }
-    
-    // Adjust to the specific day of the week for weekly/bi-weekly
+
+    // Adjust to the specific day of the week for weekly/bi-weekly (target the most recent past or current day)
     if (autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') {
-        const daysToAdd = (autoSyncSettings.day - nextPossibleSync.getDay() + 7) % 7;
-        nextPossibleSync.setDate(nextPossibleSync.getDate() + daysToAdd);
-    } else if (autoSyncSettings.frequency === 'monthly') {
-        // For monthly, if last sync was recent, we skip this month.
-        // We calculate next possible sync by advancing months until it's in the future from now.
-        while (nextPossibleSync < now) {
-            nextPossibleSync.setMonth(nextPossibleSync.getMonth() + 1);
+        // Go back in time until we hit the last occurrence of the scheduled dayOfWeek
+        while (lastScheduledSyncPoint.getDay() !== autoSyncSettings.day) {
+            lastScheduledSyncPoint.setDate(lastScheduledSyncPoint.getDate() - 1);
         }
+        // If bi-weekly, ensure we are on the correct bi-weekly interval
+        if (autoSyncSettings.frequency === 'bi-weekly') {
+            // This is tricky. A simple approach is to check if enough time passed since last sync.
+            // For robust bi-weekly, you'd need a reference start date for the cycle.
+            // For simplicity, we'll primarily rely on `lastSyncTime` and `intervalMs`.
+        }
+    } else if (autoSyncSettings.frequency === 'monthly') {
+        // For monthly, adjust to the start of the current month if past, or previous month if current time is before schedule.
+        // This makes sure lastScheduledSyncPoint points to the *last possible trigger point*
+        if (now.getDate() < lastScheduledSyncPoint.getDate()) { // If current day is before scheduled day of month
+            lastScheduledSyncPoint.setMonth(lastScheduledSyncPoint.getMonth() - 1);
+        }
+        lastScheduledSyncPoint.setDate(lastScheduledSyncPoint.getDate()); // Keep original date, just change month
     }
 
-    // Now, `nextPossibleSync` holds the first occurrence of the scheduled day/time in the future.
+    // Now, `lastScheduledSyncPoint` is the timestamp of the last *scheduled* trigger.
 
     if (!lastSyncTime) {
-        // If never synced before and auto sync is enabled, it's always due (trigger at first nextPossibleSync)
-        syncDue = true;
+        // If never synced before and current time is past the calculated lastScheduledSyncPoint, then sync
+        if (now >= lastScheduledSyncPoint) {
+            syncDue = true;
+        }
     } else {
-        // Determine the required interval based on frequency
         let intervalMs = 0;
         if (autoSyncSettings.frequency === 'weekly') {
             intervalMs = 7 * 24 * 60 * 60 * 1000;
         } else if (autoSyncSettings.frequency === 'bi-weekly') {
             intervalMs = 14 * 24 * 60 * 60 * 1000;
         } else if (autoSyncSettings.frequency === 'monthly') {
-            // For monthly, compare month difference
-            const lastSyncMonth = lastSyncTime.getMonth();
-            const lastSyncYear = lastSyncTime.getFullYear();
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
+            // For monthly, calculate the timestamp for the *next expected monthly sync* based on the last sync time
+            let nextExpectedMonthlySync = new Date(lastSyncTime);
+            nextExpectedMonthlySync.setMonth(nextExpectedMonthlySync.getMonth() + 1);
+            nextExpectedMonthlySync.setHours(scheduledHours, scheduledMinutes, 0, 0);
 
-            // If a full month or more has passed since last sync
-            if ((currentYear * 12 + currentMonth) > (lastSyncYear * 12 + lastSyncMonth)) {
-                // Now check if current time passed the scheduled time for the month that should trigger sync
-                const lastSyncScheduledDateTime = new Date(lastSyncTime.getFullYear(), lastSyncTime.getMonth(), lastSyncTime.getDate(), scheduledHours, scheduledMinutes, 0, 0);
-                
-                let nextExpectedMonthlySync = new Date(lastSyncTime);
-                nextExpectedMonthlySync.setMonth(nextExpectedMonthlySync.getMonth() + 1);
-                nextExpectedMonthlySync.setHours(scheduledHours, scheduledMinutes, 0, 0);
-
-                while (nextExpectedMonthlySync < now) {
-                    nextExpectedMonthlySync.setMonth(nextExpectedMonthlySync.getMonth() + 1);
-                }
-
-                if (now >= nextExpectedMonthlySync) {
-                    syncDue = true;
-                }
-            } else {
-                syncDue = false; // Still within the same month as last sync or earlier
+            // If the current time is past this `nextExpectedMonthlySync` and the last sync was before it
+            if (now >= nextExpectedMonthlySync && lastSyncTime < nextExpectedMonthlySync) {
+                syncDue = true;
             }
         }
         
-        // For weekly/bi-weekly, check if the interval has passed
+        // For weekly/bi-weekly, check if the interval has passed AND current time is past the *last* scheduled point
         if ((autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') && intervalMs > 0) {
-            if (now.getTime() - lastSyncTime.getTime() >= intervalMs && now.getTime() >= nextPossibleSync.getTime()) {
+            // Sync is due if enough time has passed since last sync AND current time is past the last scheduled point
+            if (now.getTime() - lastSyncTime.getTime() >= intervalMs && now >= lastScheduledSyncPoint) {
                 syncDue = true;
             }
         }
@@ -1616,8 +1614,12 @@ async function checkAndRunAutoSync() {
         await fetchAndStoreAllPrayerTimes(locationSelect.value, 'AUTO');
         // After auto sync, refresh display to ensure latest data is shown
         await displayPrayerTimes(locationSelect.value, new Date().getFullYear());
+        // Update lastAutoSync only AFTER successful sync
+        autoSyncSettings.lastAutoSync = now.toISOString();
+        await saveSetting('autoSync', autoSyncSettings);
     } else {
-        console.log('Auto sync not due yet. Next possible sync check:', nextPossibleSync.toLocaleString());
+        console.log('Auto sync not due yet. Last sync:', lastSyncTime ? lastSyncTime.toLocaleString() : 'Never');
+        console.log('Next scheduled sync point to consider:', lastScheduledSyncPoint.toLocaleString());
     }
 }
 
@@ -1636,7 +1638,7 @@ async function handleAnnualSync() {
     const lastAttempt = autoSyncSettings.lastNextYearSyncAttempt ? new Date(autoSyncSettings.lastNextYearSyncAttempt) : null;
     let shouldAttemptSync = false;
 
-    // Condition 1: It's December 31st and no attempt has been made today
+    // Condition 1: It's December 31st and no attempt has been made today for the *current* year
     if (currentMonth === 11 && currentDay === 31) { // December is month 11
         if (!lastAttempt || lastAttempt.getFullYear() !== currentYear || lastAttempt.getMonth() !== 11 || lastAttempt.getDate() !== 31) {
             shouldAttemptSync = true;

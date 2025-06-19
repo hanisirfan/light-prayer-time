@@ -6,6 +6,9 @@ const DB_VERSION = 4;
 const STORE_NAME = 'prayerTimesStore'; // Stores data for each location + year
 const SETTINGS_STORE_NAME = 'appSettingsStore'; // Re-using for settings like use24HourFormat
 
+let db; // IndexedDB instance
+let use24HourFormat = true; // Default to 24-hour, will be loaded from settings
+
 // JAKIM Prayer Zones (full list, duplicated for self-containment)
 const JAKIM_ZONES = [
     { code: 'JHR01', name: 'Johor: Pulau Aur dan Pulau Pemanggil' },
@@ -20,7 +23,7 @@ const JAKIM_ZONES = [
     { code: 'KDH06', name: 'Kedah: Langkawi' },
     { code: 'KDH07', name: 'Kedah: Gunung Jerai' },
     { code: 'KTN01', name: 'Kelantan: Bachok, Kota Bharu, Machang, Pasir Mas, Pasir Puteh, Tanah Merah, Tumpat, Kuala Krai, Mukim Chiku' },
-    { code: 'KTN03', name: 'Kelantan: Gua Musang (Daerah Galas Dan Bertam), Jeli' },
+    { code: 'KTN03', name: 'Kelantan: Gua Musang (Daerah Galas And Bertam), Jeli' },
     { code: 'MLK01', name: 'Melaka: SELURUH NEGERI MELAKA' },
     { code: 'NGS01', name: 'Negeri Sembilan: Tampin, Jempol' },
     { code: 'NGS02', name: 'Negeri Sembilan: Jelebu, Kuala Pilah, Port Dickson, Rembau, Seremban' },
@@ -73,122 +76,22 @@ const API_MONTH_MAP = {
     'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
 };
 
-const PRAYER_NAMES_MAP = {
-    'imsak': 'Imsak', 'fajr': 'Fajr', 'syuruk': 'Syuruk', 'dhuha': 'Dhuha',
-    'dhuhr': 'Dhuhr', 'asr': 'Asr', 'maghrib': 'Maghrib', 'isha': 'Isha'
-};
-
 // DOM Elements
-const body = document.body; // Reference to the body element for theme
 const zoneSelect = document.getElementById('zoneSelect');
+const monthlyPrayerTimesTableBody = document.getElementById('monthlyPrayerTimesTableBody');
+const currentMonthYearDisplay = document.getElementById('currentMonthYear');
 const prevMonthBtn = document.getElementById('prevMonthBtn');
 const nextMonthBtn = document.getElementById('nextMonthBtn');
-const currentMonthYearDisplay = document.getElementById('currentMonthYear');
-const monthlyPrayerTimesTableBody = document.getElementById('monthlyPrayerTimesTableBody');
-const monthlyPrayerTimesTable = document.querySelector('.table'); // Get the table element
+const messageModal = new bootstrap.Modal(document.getElementById('messageModal')); // Get message modal
+const modalMessageContent = document.getElementById('modalMessageContent'); // Get modal message content
 
-let db; // IndexedDB instance
-let currentDisplayDate = new Date(); // Tracks the month being displayed
-let use24HourFormat = true; // Default, will be loaded from settings
+// Current date being displayed (defaults to today's month/year)
+let currentDisplayDate = new Date();
 
-/**
- * Opens and initializes the IndexedDB database (replicated from main.js).
- * @returns {Promise<IDBDatabase>} A promise that resolves with the DB instance.
- */
-function openDatabase() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = (event) => {
-            db = event.target.result;
-            // Note: This monthly-view.js won't create stores if they don't exist
-            // It relies on main.js having created them during the app's first load.
-            console.warn("monthly-view.js: Database upgrade detected. Ensure main.js handles full schema creation.");
-        };
-
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            console.log('monthly-view.js: IndexedDB opened successfully.');
-            resolve(db);
-        };
-
-        request.onerror = (event) => {
-            console.error('monthly-view.js: IndexedDB error:', event.target.errorCode);
-            alert('Failed to open local database for monthly view.'); // Using alert for simplicity here
-            reject(event.target.error);
-        };
-    });
-}
-
-/**
- * Loads a single setting from IndexedDB (replicated from main.js).
- * @param {string} name - The name of the setting.
- * @returns {Promise<*|undefined>} The value of the setting or undefined if not found.
- */
-async function loadSetting(name) {
-    try {
-        const transaction = db.transaction([SETTINGS_STORE_NAME], 'readonly');
-        const store = transaction.objectStore(SETTINGS_STORE_NAME);
-        const data = await new Promise((resolve, reject) => {
-            const request = store.get(name);
-            request.onsuccess = () => resolve(request.result ? request.result.value : undefined);
-            request.onerror = () => reject(request.error);
-        });
-        return data;
-    } catch (error) {
-        console.error(`monthly-view.js: Error loading setting '${name}' from IndexedDB:`, error);
-        return undefined;
-    }
-}
-
-/**
- * Retrieves prayer times data for a specific location and year from IndexedDB (replicated from main.js).
- * @param {string} locationCode - The JAKIM zone code.
- * @param {number} year - The year to retrieve.
- * @returns {Promise<Array<Object>|null>} A promise that resolves with the prayer times data or null if not found.
- */
-async function getPrayerTimesForYear(locationCode, year) {
-    try {
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const id = `${locationCode}_${year}`;
-
-        const data = await new Promise((resolve, reject) => {
-            const request = store.get(id);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-
-        return data ? data.data : null;
-    } catch (error) {
-        console.error('monthly-view.js: Error retrieving prayer times from IndexedDB:', error);
-        return null;
-    }
-}
-
-/**
- * Retrieves all stored prayer time data IDs from IndexedDB.
- * @returns {Promise<Array<string>>} A promise that resolves with an array of all stored prayer time IDs.
- */
-async function getAllStoredPrayerTimeIds() {
-    try {
-        const transaction = db.transaction([STORE_NAME], 'readonly');
-        const store = transaction.objectStore(STORE_NAME);
-        const ids = await new Promise((resolve, reject) => {
-            const request = store.getAllKeys();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-        return ids;
-    } catch (error) {
-        console.error('monthly-view.js: Error retrieving all prayer time IDs from IndexedDB:', error);
-        return [];
-    }
-}
 
 /**
  * Helper function to format a time string (HH:MM:SS or HH:MM) to the user's preferred format.
- * Replicated from main.js.
+ * Duplicated from main.js for self-containment.
  * @param {string} timeStr - The time string from API (e.g., "05:48:00").
  * @param {boolean} includeSeconds - Whether to include seconds (only for current time).
  * @returns {string} Formatted time string (e.g., "05:48" or "05:48:00 AM/PM").
@@ -210,175 +113,209 @@ function formatTime(timeStr, includeSeconds = false) {
         options.second = '2-digit';
     }
 
+    // Explicitly format for 24-hour without AM/PM if use24HourFormat is true
     if (use24HourFormat) {
         let h = String(date.getHours()).padStart(2, '0');
         let m = String(date.getMinutes()).padStart(2, '0');
-        // s is not used in the formatTime logic unless includeSeconds is true
-        // For monthly view, we don't need seconds, so 's' variable won't be used
-        return `${h}:${m}`;
+        let s = String(date.getSeconds()).padStart(2, '0');
+        return includeSeconds ? `${h}:${m}:${s}` : `${h}:${m}`;
     }
     
+    // Otherwise, use browser's locale-sensitive formatting for 12-hour
     return date.toLocaleTimeString([], options);
 }
 
 /**
- * Sets the theme (dark or light mode) for the monthly view page.
- * @param {string} mode - 'dark' or 'light'.
+ * Shows a Bootstrap modal with a given title and message.
+ * Duplicated from main.js for self-containment.
+ * @param {string} title - The title of the modal.
+ * @param {string} message - The content message of the modal.
  */
-function setThemeOnMonthlyPage(mode) {
-    if (mode === 'dark') {
-        body.classList.add('dark-mode');
-        if (monthlyPrayerTimesTable) {
-            monthlyPrayerTimesTable.classList.add('table-dark');
-        }
-    } else {
-        body.classList.remove('dark-mode');
-        if (monthlyPrayerTimesTable) {
-            monthlyPrayerTimesTable.classList.remove('table-dark');
-        }
+function showMessage(title, message) {
+    document.getElementById('messageModalLabel').textContent = title;
+    modalMessageContent.innerHTML = message; // Use innerHTML to allow for basic formatting if needed
+    messageModal.show();
+}
+
+/**
+ * Opens and initializes the IndexedDB database.
+ * Duplicated from main.js for self-containment.
+ * @returns {Promise<IDBDatabase>} A promise that resolves with the DB instance.
+ */
+function openDatabase() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            // Create object store for prayer times
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+            }
+            // Create object store for app settings if it doesn't exist
+            if (!db.objectStoreNames.contains(SETTINGS_STORE_NAME)) {
+                db.createObjectStore(SETTINGS_STORE_NAME, { keyPath: 'name' });
+            }
+            // Note: Migration logic from localStorage is in main.js, no need to duplicate here
+        };
+
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            resolve(db);
+        };
+
+        request.onerror = (event) => {
+            console.error('IndexedDB error:', event.target.errorCode);
+            reject(event.target.error);
+        };
+    });
+}
+
+/**
+ * Loads a single setting from IndexedDB.
+ * Duplicated from main.js for self-containment.
+ * @param {string} name - The name of the setting.
+ * @returns {Promise<*|undefined>} The value of the setting or undefined if not found.
+ */
+async function loadSetting(name) {
+    try {
+        const transaction = db.transaction([SETTINGS_STORE_NAME], 'readonly');
+        const store = transaction.objectStore(SETTINGS_STORE_NAME);
+        const data = await new Promise((resolve, reject) => {
+            const request = store.get(name);
+            request.onsuccess = () => resolve(request.result ? request.result.value : undefined);
+            request.onerror = () => reject(request.error);
+        });
+        return data;
+    } catch (error) {
+        console.error(`Error loading setting '${name}' from IndexedDB:`, error);
+        return undefined;
     }
 }
 
+/**
+ * Retrieves prayer times data for a specific location and year from IndexedDB.
+ * Duplicated from main.js for self-containment.
+ * @param {string} locationCode - The JAKIM zone code.
+ * @param {number} year - The year to retrieve.
+ * @returns {Promise<Array<Object>|null>} A promise that resolves with the prayer times data or null if not found.
+ */
+async function getPrayerTimesForYear(locationCode, year) {
+    try {
+        const transaction = db.transaction([STORE_NAME], 'readonly');
+        const store = transaction.objectStore(STORE_NAME);
+        const id = `${locationCode}_${year}`;
+
+        const data = await new Promise((resolve, reject) => {
+            const request = store.get(id);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+
+        return data ? data.data : null;
+    } catch (error) {
+        console.error('Error retrieving prayer times from IndexedDB:', error);
+        return null;
+    }
+}
 
 /**
- * Populates the zone select dropdown with only synced JAKIM zones.
- * Adds a placeholder option to prompt syncing new zones.
+ * Populates the zone select dropdown with JAKIM zones and loads last selected.
  */
 async function populateZoneSelect() {
-    if (!zoneSelect) return;
-
     zoneSelect.innerHTML = ''; // Clear existing options
-
-    const currentYear = new Date().getFullYear();
-    const storedIds = await getAllStoredPrayerTimeIds();
-    const syncedZoneCodes = new Set();
-
-    storedIds.forEach(id => {
-        const [zoneCode, year] = id.split('_');
-        if (parseInt(year, 10) === currentYear) { // Only show zones with data for current year
-            syncedZoneCodes.add(zoneCode);
-        }
+    
+    // Add options for each JAKIM zone
+    JAKIM_ZONES.forEach(zone => {
+        const option = document.createElement('option');
+        option.value = zone.code;
+        option.textContent = zone.name;
+        zoneSelect.appendChild(option);
     });
 
-    const availableZones = JAKIM_ZONES.filter(zone => syncedZoneCodes.has(zone.code));
-
-    if (availableZones.length > 0) {
-        // Add a default introductory option, or select the first available if no last selected
-        const defaultOption = document.createElement('option');
-        defaultOption.value = '';
-        defaultOption.textContent = '--- Select a Synced Zone ---';
-        defaultOption.disabled = true;
-        // Do not set selected=true here, let logic below determine initial selection
-        zoneSelect.appendChild(defaultOption);
-
-        availableZones.forEach(zone => {
-            const option = document.createElement('option');
-            option.value = zone.code;
-            option.textContent = zone.name;
-            zoneSelect.appendChild(option);
-        });
-    }
-
-    // Add option to sync new zones
+    // Add a special option for "Sync New Zone"
     const syncNewZoneOption = document.createElement('option');
     syncNewZoneOption.value = 'sync_new_zone';
-    syncNewZoneOption.textContent = '➡️ Sync New Zone in Main App';
+    syncNewZoneOption.textContent = 'Sync New Zone (from Main Page)';
     zoneSelect.appendChild(syncNewZoneOption);
 
-    // Try to load last selected location from main app settings
+    // Load last selected location from settings
     const savedLocation = await loadSetting('lastSelectedLocation');
-    if (savedLocation && syncedZoneCodes.has(savedLocation)) {
+    if (savedLocation && JAKIM_ZONES.some(zone => zone.code === savedLocation)) {
         zoneSelect.value = savedLocation;
-    } else if (availableZones.length > 0) {
-        zoneSelect.value = availableZones[0].code; // Select the first available synced zone
     } else {
-        zoneSelect.value = 'sync_new_zone'; // Default to sync prompt if no zones synced
-        // If there are no synced zones, explicitly select the 'sync_new_zone' option
-        syncNewZoneOption.selected = true;
+        // Fallback to WLY01 if no saved location or invalid, or first zone if WLY01 not available
+        const defaultZone = 'WLY01';
+        if (JAKIM_ZONES.some(zone => zone.code === defaultZone)) {
+            zoneSelect.value = defaultZone;
+        } else {
+            zoneSelect.value = JAKIM_ZONES[0].code; // Fallback to the very first zone
+        }
     }
 }
 
+/**
+ * Formats a Miladi date into "DD/MM" format.
+ * @param {Date} date - The Miladi date object.
+ * @returns {string} Formatted date string (e.g., "19/06").
+ */
+function formatMiladiDateMonthly(date) {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    return `${day}/${month}`;
+}
 
 /**
- * Displays prayer times for the current month and selected zone.
+ * Displays monthly prayer times for the selected zone and current display month/year.
  */
 async function displayMonthlyPrayerTimes() {
     monthlyPrayerTimesTableBody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">Loading monthly prayer times...</td></tr>';
     
     const selectedZoneCode = zoneSelect.value;
-
-    if (!selectedZoneCode || selectedZoneCode === 'sync_new_zone') {
-        monthlyPrayerTimesTableBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">Please select a synced zone or synchronize new zones from the main app.</td></tr>`;
-        currentMonthYearDisplay.textContent = 'No Zone Selected';
-        return;
-    }
-
-    currentMonthYearDisplay.textContent = currentDisplayDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-
     const year = currentDisplayDate.getFullYear();
-    const month = currentDisplayDate.getMonth(); // 0-indexed month
+    const month = currentDisplayDate.getMonth() + 1; // getMonth() is 0-indexed
 
-    const allYearData = await getPrayerTimesForYear(selectedZoneCode, year);
+    currentMonthYearDisplay.textContent = `${currentDisplayDate.toLocaleString('en-GB', { month: 'long', year: 'numeric' })}`;
 
-    if (!allYearData || allYearData.length === 0) {
-        monthlyPrayerTimesTableBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No prayer data available for ${JAKIM_ZONES.find(z => z.code === selectedZoneCode)?.name || selectedZoneCode} for ${year}. Please sync in the main app.</td></tr>`;
+    const allPrayerTimesForYear = await getPrayerTimesForYear(selectedZoneCode, year);
+
+    if (!allPrayerTimesForYear || allPrayerTimesForYear.length === 0) {
+        monthlyPrayerTimesTableBody.innerHTML = `<tr><td colspan="10" class="text-center text-danger py-4">No prayer times found for this zone and year. Please sync data from the main page.</td></tr>`;
         return;
     }
 
-    const today = new Date();
-    // Format today's date to match API's 'DD-Mon-YYYY' format for comparison
-    const todayDay = String(today.getDate()).padStart(2, '0');
-    const todayMonthAbbr = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-    const todayYear = today.getFullYear();
-    const todayFormattedForHighlight = `${todayDay}-${todayMonthAbbr}-${todayYear}`;
-
-    let monthData = [];
-    // Convert 0-indexed month to 1-indexed for comparison with API's month number
-    const targetMonthNum = month + 1; 
-
-    for (const dayData of allYearData) {
-        const parts = dayData.date.split('-'); // e.g., ["01", "Jan", "2025"]
-        const apiMonthNum = parseInt(API_MONTH_MAP[parts[1]], 10); // Get numeric month from map
-
-        if (apiMonthNum === targetMonthNum && parseInt(parts[2], 10) === year) {
-            monthData.push(dayData);
-        }
-    }
-
-    // Sort monthData by day to ensure correct order
-    monthData.sort((a, b) => {
-        const dayA = parseInt(a.date.split('-')[0], 10);
-        const dayB = parseInt(b.date.split('-')[0], 10);
-        return dayA - dayB;
+    const monthlyData = allPrayerTimesForYear.filter(dayData => {
+        const parts = dayData.date.split('-'); // "DD-Mon-YYYY"
+        const apiMonthNum = API_MONTH_MAP[parts[1]]; // Convert 'Mon' to 'MM'
+        return parseInt(apiMonthNum, 10) === month; // Filter by the current month
     });
+
+    if (monthlyData.length === 0) {
+         monthlyPrayerTimesTableBody.innerHTML = `<tr><td colspan="10" class="text-center text-warning py-4">No data available for ${currentMonthYearDisplay.textContent}. The API might not have provided data for this month yet.</td></tr>`;
+         return;
+    }
 
     monthlyPrayerTimesTableBody.innerHTML = ''; // Clear loading message
 
-    if (monthData.length === 0) {
-        monthlyPrayerTimesTableBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No prayer data for ${currentDisplayDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}. This might mean the data is not yet available from the API or not synced.</td></tr>`;
-        return;
-    }
+    const today = new Date();
+    // Format today's date to match API's YYYY-MM-DD for comparison
+    const todayFormattedForComparison = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    monthData.forEach(dayData => {
+    monthlyData.forEach(dayData => {
         const row = document.createElement('tr');
+
+        // Convert API date "DD-Mon-YYYY" to a Date object for formatting
+        const parts = dayData.date.split('-');
+        const apiDateAsDateObject = new Date(parts[2], parseInt(API_MONTH_MAP[parts[1]], 10) - 1, parts[0]);
         
-        // Construct date string from dayData for comparison
-        const apiDateDay = dayData.date.split('-')[0];
-        const apiDateMonthStr = dayData.date.split('-')[1];
-        const apiDateYear = dayData.date.split('-')[2];
-        const apiDateForHighlight = `${apiDateDay}-${apiDateMonthStr}-${apiDateYear}`;
-
-        if (apiDateForHighlight === todayFormattedForHighlight) {
-            row.classList.add('highlight-today');
-        }
-
-        // Create a Date object from the API date string to get the weekday name
-        const dateForWeekday = new Date(`${apiDateMonthStr} ${apiDateDay}, ${apiDateYear}`);
-        const weekday = dateForWeekday.toLocaleString('en-US', { weekday: 'short' });
+        // Remove .table-primary highlighting
+        // if (apiDateFormattedForComparison === todayFormattedForComparison) {
+        //     row.classList.add('table-primary'); // Highlight today's date using Bootstrap class
+        // }
 
         row.innerHTML = `
-            <td>${weekday}</td>
-            <td>${dayData.date.split('-')[0]}</td>
+            <td>${apiDateAsDateObject.toLocaleString('en-GB', { weekday: 'short' })}</td>
+            <td>${formatMiladiDateMonthly(apiDateAsDateObject)}</td>
             <td>${formatTime(dayData.imsak)}</td>
             <td>${formatTime(dayData.fajr)}</td>
             <td>${formatTime(dayData.syuruk)}</td>
@@ -392,18 +329,11 @@ async function displayMonthlyPrayerTimes() {
     });
 }
 
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
-    // Open DB first to load settings
+    // Open IndexedDB first
     await openDatabase();
-
-    // Load theme setting FIRST and apply it
-    const loadedTheme = await loadSetting('theme');
-    if (loadedTheme !== undefined) {
-        setThemeOnMonthlyPage(loadedTheme); // Apply the loaded theme
-    } else {
-        setThemeOnMonthlyPage('dark'); // Default to dark mode on first visit if no setting
-    }
 
     // Load time format preference for this page
     const loadedTimeFormat = await loadSetting('use24HourFormat');
@@ -411,15 +341,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         use24HourFormat = loadedTimeFormat;
     }
 
+    // Load theme setting from IndexedDB and apply it
+    const loadedTheme = await loadSetting('theme');
+    const bodyElement = document.body;
+    const tableElement = document.querySelector('.table');
+
+    if (loadedTheme === 'dark') {
+        bodyElement.classList.add('dark-mode');
+        if (tableElement) {
+            tableElement.classList.add('table-dark');
+        }
+    } else {
+        bodyElement.classList.remove('dark-mode');
+        if (tableElement) {
+            tableElement.classList.remove('table-dark');
+        }
+    }
+
     await populateZoneSelect();
     await displayMonthlyPrayerTimes();
 
     zoneSelect.addEventListener('change', (event) => {
         if (event.target.value === 'sync_new_zone') {
-            alert('Please sync new zones from the main application page (Settings > Sync Now).');
-            // Optionally, redirect: window.location.href = 'index.html';
-            // After alert, attempt to re-select the previously selected *valid* zone
-            populateZoneSelect(); // Re-populate to reset dropdown and select best option
+            showMessage(
+                'Sync New Zone',
+                'Please sync new zones from the main application page (Settings > Sync Now).<br><br>Returning to main page.'
+            );
+            // After message, redirect:
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 3000); // Redirect after 3 seconds
+            
+            // To prevent the dropdown from permanently showing "Sync New Zone",
+            // we re-populate the select and attempt to re-select the previously selected *valid* zone.
+            populateZoneSelect(); 
         } else {
             displayMonthlyPrayerTimes();
         }
