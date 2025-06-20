@@ -30,6 +30,9 @@
     <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
+    <!-- Notification Audio Element (NEW) -->
+    <audio id="notificationSound" src="audio/notification1.mp3" preload="auto"></audio>
+
     <!-- Settings Button (Fixed at top-right of viewport) -->
     <button class="btn btn-primary settings-button" type="button" data-bs-toggle="offcanvas" data-bs-target="#settingsOffcanvas" aria-controls="settingsOffcanvas">
         <i class="bi bi-gear-fill fs-5"></i>
@@ -208,6 +211,9 @@
 
             <hr class="my-4">
 
+            <!-- Next Scheduled Auto Sync Display (NEW) -->
+            <p class="h6 text-muted mb-3" id="nextAutoSyncDisplay">Next auto sync: N/A</p>
+
             <button class="btn btn-outline-secondary w-100 mb-3" data-bs-toggle="modal" data-bs-target="#syncHistoryModal">
                 View Sync History
             </button>
@@ -358,6 +364,11 @@
                         <li><strong>Progressive Web App (PWA) features:</strong> For installability and offline capabilities.</li>
                     </ul>
                     <p class="mt-4">Developed by <a href="https://www.hanisirfan.xyz" target="_blank" rel="noopener noreferrer">Hanis Irfan</a> with the help of Google Gemini ❤️</p>
+                    <p class="mt-4">
+                        <strong>Notification Sound Attribution:</strong><br>
+                        "Simple notification" by <a href="https://pixabay.com/users/universfield-28286088/" target="_blank" rel="noopener noreferrer">Universfield</a> on Pixabay.<br>
+                        License: Pixabay Content License. <a href="https://pixabay.com/service/license-summary/" target="_blank" rel="noopener noreferrer">View License</a>
+                    </p>
                 </div>
                 <div class="modal-footer border-0">
                     <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">Close</button>

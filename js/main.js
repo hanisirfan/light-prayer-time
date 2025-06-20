@@ -100,7 +100,7 @@ const modalMessageContent = document.getElementById('modalMessageContent');
 const syncButtonSpinner = syncButton.querySelector('.spinner-border');
 const syncHistoryModal = new bootstrap.Modal(document.getElementById('syncHistoryModal'));
 const syncHistoryList = document.getElementById('syncHistoryList');
-const syncHistorySortSelect = document.getElementById('syncHistorySortSelect'); // NEW
+const syncHistorySortSelect = document.getElementById('syncHistorySortSelect');
 
 // Main Display Elements
 const mainDisplayContent = document.getElementById('mainDisplayContent');
@@ -122,10 +122,10 @@ const announcementZoneName = document.getElementById('announcementZoneName');
 
 // Iqama Countdown Display Elements
 const iqamaCountdownDisplay = document.getElementById('iqamaCountdownDisplay');
-const iqamaPrayerName = document.getElementById('iqamaPrayerName'); // Now h2, bold
-const iqamaPrayerTime = document.getElementById('iqamaPrayerTime'); // Now h3, muted
+const iqamaPrayerName = document.getElementById('iqamaPrayerName');
+const iqamaPrayerTime = document.getElementById('iqamaPrayerTime');
 const iqamaCountdown = document.getElementById('iqamaCountdown');
-const iqamaZoneName = document.getElementById('iqamaZoneName'); // Now h4, secondary
+const iqamaZoneName = document.getElementById('iqamaZoneName');
 
 // Post-Iqama Message Display Elements
 const postIqamaMessageDisplay = document.getElementById('postIqamaMessageDisplay');
@@ -144,7 +144,7 @@ const autoSyncFrequencyRadios = document.querySelectorAll('input[name="autoSyncF
 const autoSyncDaySelect = document.getElementById('autoSyncDay');
 const autoSyncTimeInput = document.getElementById('autoSyncTime');
 
-// Debug UI Elements (NEW)
+// Debug UI Elements
 const debugModeSwitch = document.getElementById('debugModeSwitch');
 const debugButtonsContainer = document.getElementById('debugButtonsContainer');
 const simPrayerAnnounceBtn = document.getElementById('simPrayerAnnounceBtn');
@@ -152,15 +152,16 @@ const simPrayerSelect = document.getElementById('simPrayerSelect');
 const simIqamaCountdownBtn = document.getElementById('simIqamaCountdownBtn');
 const simIqamaDurationInput = document.getElementById('simIqamaDuration');
 const simPostIqamaBtn = document.getElementById('simPostIqamaBtn');
-const simApiSyncSuccessBtn = document.getElementById('simApiSyncSuccessBtn'); // NEW
-const simApiSyncFailBtn = document.getElementById('simApiSyncFailBtn');       // NEW
+const simApiSyncSuccessBtn = document.getElementById('simApiSyncSuccessBtn');
+const simApiSyncFailBtn = document.getElementById('simApiSyncFailBtn');
 const returnToMainBtn = document.getElementById('returnToMainBtn');
 const resetAnnouncedPrayersBtn = document.getElementById('resetAnnouncedPrayersBtn');
 
-// New DOM elements for Mosque Name
+// New DOM elements for Mosque Name and Notifications
 const mosqueNameInput = document.getElementById('mosqueNameInput');
 const mosqueNameDisplay = document.getElementById('mosqueNameDisplay');
-
+const notificationSound = document.getElementById('notificationSound'); // Audio element for notification sound
+const nextAutoSyncDisplay = document.getElementById('nextAutoSyncDisplay'); // For next scheduled auto sync date/time
 
 let db; // IndexedDB instance
 let todayPrayerDataGlobal = null; // Store today's prayer data globally for clock updates
@@ -189,7 +190,7 @@ let autoSyncSettings = {
     lastNextYearSyncAttempt: null // Timestamp of last attempt to sync next year's data
 };
 
-// Display State Management (NEW)
+// Display State Management
 let currentDisplayState = 'main'; // 'main', 'announcement', 'iqamaCountdown', 'postIqamaMessage'
 // To prevent repeated announcements on the same day
 let announcedPrayersToday = {
@@ -202,7 +203,7 @@ let announcedPrayersToday = {
 };
 let activePrayerDetails = null; // Stores details for the prayer currently in announcement/iqama phase
 
-// Debug Mode State (NEW, managed by UI switch and stored in IndexedDB)
+// Debug Mode State (managed by UI switch and stored in IndexedDB)
 let debugModeEnabled = false;
 
 // Mosque Name setting
@@ -1061,6 +1062,32 @@ function showDisplay(mode) {
 }
 
 /**
+ * Plays the notification sound.
+ */
+function playNotificationSound() {
+    if (notificationSound) {
+        notificationSound.volume = 0.5; // Adjust volume as needed (0.0 to 1.0)
+        notificationSound.play().catch(e => console.warn("Failed to play notification sound:", e));
+    }
+}
+
+/**
+ * Shows a browser push notification.
+ * @param {string} title - The title of the notification.
+ * @param {string} body - The body text of the notification.
+ */
+function showPushNotification(title, body) {
+    if (Notification.permission === 'granted') {
+        new Notification(title, {
+            body: body,
+            icon: 'images/logo/logo-192x192.png' // Use app icon for notification
+        });
+    } else {
+        console.log("Notification permission not granted. Cannot show push notification.");
+    }
+}
+
+/**
  * Triggers the Prayer Announcement display.
  * @param {string} prayerNameKey - The key of the prayer (e.g., 'fajr').
  * @param {string} prayerTimeStr - Formatted prayer time (e.g., "05:30 AM").
@@ -1096,6 +1123,8 @@ function startPrayerAnnouncement(prayerNameKey, prayerTimeStr, zoneName) {
     announcementZoneName.textContent = activePrayerDetails.zone;
 
     showDisplay('announcement');
+    playNotificationSound(); // Play sound for announcement
+    showPushNotification(`It's ${activePrayerDetails.name} time!`, `The time is ${activePrayerDetails.time} in ${activePrayerDetails.zone}.`);
     announcedPrayersToday[prayerNameKey] = true; // Mark as announced for today
 
     // After 30 seconds, transition to Iqama Countdown
@@ -1117,7 +1146,7 @@ function startPrayerAnnouncement(prayerNameKey, prayerTimeStr, zoneName) {
 
 /**
  * Triggers the Iqama Countdown display.
- * @param {number|null} [simulatedDurationSeconds=null] - Optional. If provided, sets a simulated countdown duration. Default is 45s for simulation.
+ * @param {number|null} [simulatedDurationSeconds=null] - Optional. If provided, sets a simulated countdown duration.
  */
 function startIqamaCountdown(simulatedDurationSeconds = null) {
     if (!activePrayerDetails) {
@@ -1198,6 +1227,8 @@ function startPostIqamaMessage() {
     if (iqamaCountdownInterval) clearInterval(iqamaCountdownInterval); // Ensure Iqama interval is cleared
 
     showDisplay('postIqamaMessage');
+    playNotificationSound(); // Play sound for post-Iqama message
+    showPushNotification("Time for Prayer!", "The Iqama has commenced. Please straighten your rows and silent your devices.");
     
     // After 30 seconds, return to Main Display
     nextPrayerTimeout = setTimeout(() => {
@@ -1470,8 +1501,9 @@ async function saveAllSettings() {
     await saveSetting('debugModeEnabled', debugModeEnabled);
     await saveSetting('lastSelectedLocation', locationSelect.value);
     await saveSetting('theme', darkModeSwitch.checked ? 'dark' : 'light'); 
-    await saveSetting('mosqueName', mosqueName); // Save Mosque Name (NEW)
+    await saveSetting('mosqueName', mosqueName);
     console.log("All settings saved to IndexedDB.");
+    updateNextAutoSyncDisplay(); // Update the display whenever settings are saved
 }
 
 /**
@@ -1507,7 +1539,7 @@ function handleIqamaInputChange(event) {
 }
 
 /**
- * Toggles the visibility of auto-sync schedule options based on master switch and frequency selection. (NEW)
+ * Toggles the visibility of auto-sync schedule options based on master switch and frequency selection.
  */
 function toggleAutoSyncScheduleOptions() {
     if (autoSyncMasterSwitch.checked) {
@@ -1515,10 +1547,67 @@ function toggleAutoSyncScheduleOptions() {
     } else {
         autoSyncScheduleDetails.style.display = 'none';
     }
+    updateNextAutoSyncDisplay(); // Update display when visibility changes
 }
 
 /**
- * Checks if an auto sync is due and triggers it. (NEW)
+ * Calculates and updates the display for the next scheduled auto sync.
+ */
+function updateNextAutoSyncDisplay() {
+    if (!autoSyncSettings.enabled) {
+        nextAutoSyncDisplay.textContent = 'Next auto sync: Disabled';
+        return;
+    }
+
+    const now = new Date();
+    const [scheduledHours, scheduledMinutes] = autoSyncSettings.time.split(':').map(Number);
+    let nextSyncDateTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), scheduledHours, scheduledMinutes, 0, 0);
+
+    // If today's scheduled time has already passed, set it for tomorrow
+    if (nextSyncDateTime <= now) {
+        nextSyncDateTime.setDate(nextSyncDateTime.getDate() + 1);
+    }
+
+    // Adjust for weekly/bi-weekly frequency
+    if (autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') {
+        const targetDay = autoSyncSettings.day; // 0 for Sunday, 6 for Saturday
+        while (nextSyncDateTime.getDay() !== targetDay) {
+            nextSyncDateTime.setDate(nextSyncDateTime.getDate() + 1);
+        }
+        // For bi-weekly, ensure it's on the correct week interval from last sync
+        // This is a simplification; a truly robust bi-weekly sync would need a fixed start date
+        // For now, if the last sync was within the current week cycle, we might push it to next cycle.
+        if (autoSyncSettings.frequency === 'bi-weekly' && autoSyncSettings.lastAutoSync) {
+            const lastSyncDate = new Date(autoSyncSettings.lastAutoSync);
+            const daysSinceLastSync = Math.floor((nextSyncDateTime.getTime() - lastSyncDate.getTime()) / (24 * 60 * 60 * 1000));
+            // If the calculated nextSyncDateTime is within the same 7-day period as lastSyncDate,
+            // but the bi-weekly interval hasn't passed, push it to the next week.
+            if (daysSinceLastSync < 14) { // Only accurate if lastSyncDate was also on the targetDay
+                // More robust check needed: ensure nextSyncDateTime is at least 14 days after lastAutoSync.
+                // For simplicity, if current calculated nextSyncDateTime is before 14 days from last sync,
+                // we'll advance it by a week until it is.
+                while (nextSyncDateTime.getTime() - lastSyncDate.getTime() < 14 * 24 * 60 * 60 * 1000) {
+                     nextSyncDateTime.setDate(nextSyncDateTime.getDate() + 7);
+                }
+            }
+        }
+    } else if (autoSyncSettings.frequency === 'monthly') {
+        // For monthly, if the calculated nextSyncDateTime is still in the past, move it to next month
+        // This is primarily handled by the initial `nextSyncDateTime <= now` check, but for monthly,
+        // it should target the same day of the month as `now.getDate()`
+        // If the current day of month is past the scheduled day, set it for next month.
+        if (now.getDate() > nextSyncDateTime.getDate()) {
+            nextSyncDateTime.setMonth(nextSyncDateTime.getMonth() + 1);
+        }
+    }
+
+    const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: !use24HourFormat };
+    nextAutoSyncDisplay.textContent = `Next auto sync: ${nextSyncDateTime.toLocaleString('en-GB', options)}`;
+}
+
+
+/**
+ * Checks if an auto sync is due and triggers it.
  */
 async function checkAndRunAutoSync() {
     const now = new Date();
@@ -1545,11 +1634,19 @@ async function checkAndRunAutoSync() {
             lastScheduledSyncPoint.setDate(lastScheduledSyncPoint.getDate() - 1);
         }
         // If bi-weekly, ensure we are on the correct bi-weekly interval
-        if (autoSyncSettings.frequency === 'bi-weekly') {
-            // This is tricky. A simple approach is to check if enough time passed since last sync.
-            // For robust bi-weekly, you'd need a reference start date for the cycle.
-            // For simplicity, we'll primarily rely on `lastSyncTime` and `intervalMs`.
+        // This is tricky. A simple approach is to check if enough time passed since last sync.
+        // For robust bi-weekly, you'd need a reference start date for the cycle.
+        // For simplicity, we'll primarily rely on `lastSyncTime` and `intervalMs`.
+        if (autoSyncSettings.frequency === 'bi-weekly' && lastSyncTime) {
+            const daysSinceLastSync = Math.floor((now.getTime() - lastSyncTime.getTime()) / (24 * 60 * 60 * 1000));
+            if (daysSinceLastSync < 14) { // Not enough days passed for bi-weekly, so not due based on interval
+                 syncDue = false; // Reset to false even if other conditions made it true
+                 console.log('Auto sync not due bi-weekly interval yet.');
+                 updateNextAutoSyncDisplay();
+                 return;
+            }
         }
+
     } else if (autoSyncSettings.frequency === 'monthly') {
         // For monthly, adjust to the start of the current month if past, or previous month if current time is before schedule.
         // This makes sure lastScheduledSyncPoint points to the *last possible trigger point*
@@ -1606,6 +1703,7 @@ async function checkAndRunAutoSync() {
         console.log('Auto sync not due yet. Last sync:', lastSyncTime ? lastSyncTime.toLocaleString() : 'Never');
         console.log('Next scheduled sync point to consider:', lastScheduledSyncPoint.toLocaleString());
     }
+    updateNextAutoSyncDisplay(); // Always update display after checking sync status
 }
 
 
@@ -1663,7 +1761,7 @@ async function handleAnnualSync() {
 
 
 /**
- * Toggles the visibility of the debug buttons. (NEW)
+ * Toggles the visibility of the debug buttons.
  */
 function toggleDebugButtonsVisibility() {
     if (debugModeEnabled) {
@@ -1674,7 +1772,7 @@ function toggleDebugButtonsVisibility() {
 }
 
 /**
- * Simulates a Prayer Announcement. (NEW, used by UI)
+ * Simulates a Prayer Announcement.
  * @param {string} prayerKey - The key of the prayer to simulate (e.g., 'fajr').
  */
 function simulatePrayerAnnouncementAction(prayerKey) {
@@ -1702,7 +1800,7 @@ function simulatePrayerAnnouncementAction(prayerKey) {
 }
 
 /**
- * Simulates an Iqama Countdown. (NEW, used by UI)
+ * Simulates an Iqama Countdown.
  * @param {string} prayerKey - The key of the prayer to simulate (e.g., 'fajr').
  * @param {number} [durationSeconds=45] - The duration of the simulation in seconds.
  */
@@ -1744,7 +1842,7 @@ function simulateIqamaCountdownAction(prayerKey, durationSeconds = 45) {
 }
 
 /**
- * Simulates the Post-Iqama Message. (NEW, used by UI)
+ * Simulates the Post-Iqama Message.
  */
 function simulatePostIqamaMessageAction() {
     if (!debugModeEnabled) {
@@ -1756,7 +1854,7 @@ function simulatePostIqamaMessageAction() {
 }
 
 /**
- * Simulates an API Sync event and adds it to history. (NEW)
+ * Simulates an API Sync event and adds it to history.
  * @param {boolean} isSuccess - True for a successful sync, false for a failed one.
  */
 async function simulateApiSyncAction(isSuccess) {
@@ -1795,7 +1893,7 @@ async function simulateApiSyncAction(isSuccess) {
 
 
 /**
- * Returns the display to the Main Display. (NEW, used by UI)
+ * Returns the display to the Main Display.
  */
 function returnToMainAction() {
     if (!debugModeEnabled) {
@@ -1807,7 +1905,7 @@ function returnToMainAction() {
 }
 
 /**
- * Resets the announced prayer flags for the current day. (NEW, used by UI)
+ * Resets the announced prayer flags for the current day.
  */
 function resetAnnouncedPrayersAction() {
     if (!debugModeEnabled) {
@@ -1830,10 +1928,17 @@ function resetAnnouncedPrayersAction() {
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
+    // Request notification permission on load
+    if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+            console.log('Notification permission:', permission);
+        });
+    }
+
     // Attempt to apply theme from localStorage immediately for quick visual load
     // This is temporary until IndexedDB is fully loaded.
     const initialLocalStorageTheme = localStorage.getItem('theme');
-    if (initialLocalStorageTheme === 'light') { // Check for 'light' explicitly
+    if (initialLocalStorageTheme === 'light') {
         setTheme('light');
     } else {
         setTheme('dark'); // Default to dark mode or if 'dark' was saved
@@ -1886,10 +1991,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Always attempt to display prayer times after initial setup/sync attempt
     await displayPrayerTimes(initialLocationCode, currentYear);
 
-    // Check and run auto sync for current year after initial display (NEW)
+    // Initial display update for next auto sync
+    updateNextAutoSyncDisplay();
+
+    // Check and run auto sync for current year after initial display
     checkAndRunAutoSync();
 
-    // Handle annual sync for next year (NEW)
+    // Handle annual sync for next year
     handleAnnualSync();
 
 
@@ -1932,14 +2040,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     iqamaMaghribInput.addEventListener('input', handleIqamaInputChange);
     iqamaIshaInput.addEventListener('input', handleIqamaInputChange);
 
-    // Mosque Name Input Listener (NEW)
+    // Mosque Name Input Listener
     mosqueNameInput.addEventListener('input', async (event) => {
         mosqueName = event.target.value.trim();
         await saveAllSettings(); // Save the new mosque name
         mosqueNameDisplay.textContent = mosqueName; // Update display immediately
     });
 
-    // Auto Sync Master Switch Listener (NEW)
+    // Auto Sync Master Switch Listener
     autoSyncMasterSwitch.addEventListener('change', async (event) => {
         autoSyncSettings.enabled = event.target.checked;
         toggleAutoSyncScheduleOptions(); // Show/hide details based on master switch
@@ -1950,7 +2058,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Auto Sync Radio and Select listeners (NEW)
+    // Auto Sync Radio and Select listeners
     autoSyncFrequencyRadios.forEach(radio => {
         radio.addEventListener('change', async (event) => {
             autoSyncSettings.frequency = event.target.value;
@@ -1966,12 +2074,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         await saveAllSettings();
     });
 
-    // Event listener for showing Sync History modal (NEW)
+    // Event listener for showing Sync History modal
     document.getElementById('syncHistoryModal').addEventListener('show.bs.modal', displaySyncHistory);
     syncHistorySortSelect.addEventListener('change', displaySyncHistory); // Re-display history when sort changes
 
 
-    // Debug Mode Switch Listener (NEW)
+    // Debug Mode Switch Listener
     debugModeSwitch.addEventListener('change', async (event) => {
         debugModeEnabled = event.target.checked;
         await saveAllSettings();
@@ -1980,7 +2088,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateClockAndPrayerStatus(); 
     });
 
-    // Debug Button Listeners (NEW)
+    // Debug Button Listeners
     simPrayerAnnounceBtn.addEventListener('click', () => simulatePrayerAnnouncementAction(simPrayerSelect.value));
     simIqamaCountdownBtn.addEventListener('click', () => simulateIqamaCountdownAction(simPrayerSelect.value, parseInt(simIqamaDurationInput.value, 10)));
     simPostIqamaBtn.addEventListener('click', simulatePostIqamaMessageAction);
