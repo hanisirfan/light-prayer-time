@@ -163,6 +163,12 @@ const mosqueNameDisplay = document.getElementById('mosqueNameDisplay');
 const notificationSound = document.getElementById('notificationSound'); // Audio element for notification sound
 const nextAutoSyncDisplay = document.getElementById('nextAutoSyncDisplay'); // For next scheduled auto sync date/time
 
+// Data Import/Export Buttons
+const exportDataBtn = document.getElementById('exportDataBtn');
+const importDataBtn = document.getElementById('importDataBtn');
+const importFileInput = document.getElementById('importFileInput');
+
+
 let db; // IndexedDB instance
 let todayPrayerDataGlobal = null; // Store today's prayer data globally for clock updates
 let nextPrayerTimeout; // To clear previous countdown timeouts for main display
@@ -1066,6 +1072,9 @@ function showDisplay(mode) {
  */
 function playNotificationSound() {
     if (notificationSound) {
+        // To ensure the sound plays even if the audio element is busy, reset it
+        notificationSound.pause();
+        notificationSound.currentTime = 0;
         notificationSound.volume = 0.5; // Adjust volume as needed (0.0 to 1.0)
         notificationSound.play().catch(e => console.warn("Failed to play notification sound:", e));
     }
@@ -1077,13 +1086,23 @@ function playNotificationSound() {
  * @param {string} body - The body text of the notification.
  */
 function showPushNotification(title, body) {
-    if (Notification.permission === 'granted') {
+    if ('Notification' in window && Notification.permission === 'granted') {
         new Notification(title, {
             body: body,
             icon: 'images/logo/logo-192x192.png' // Use app icon for notification
         });
+    } else if ('Notification' in window && Notification.permission !== 'denied') {
+        // If permission is 'default' or 'prompt', ask again
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: 'images/logo/logo-192x192.png'
+                });
+            }
+        });
     } else {
-        console.log("Notification permission not granted. Cannot show push notification.");
+        console.log("Notification permission not granted or denied. Cannot show push notification.");
     }
 }
 
@@ -1452,7 +1471,7 @@ async function loadSettings() {
     }
     autoSyncDaySelect.value = autoSyncSettings.day;
     autoSyncTimeInput.value = autoSyncSettings.time;
-    toggleAutoSyncScheduleOptions();
+    toggleAutoSyncScheduleOptions(); // This will also call updateNextAutoSyncDisplay
 
     // Load debug mode setting
     const loadedDebugMode = await loadSetting('debugModeEnabled');
@@ -1571,31 +1590,29 @@ function updateNextAutoSyncDisplay() {
     // Adjust for weekly/bi-weekly frequency
     if (autoSyncSettings.frequency === 'weekly' || autoSyncSettings.frequency === 'bi-weekly') {
         const targetDay = autoSyncSettings.day; // 0 for Sunday, 6 for Saturday
+        // Keep advancing day by day until we hit the targetDay
         while (nextSyncDateTime.getDay() !== targetDay) {
             nextSyncDateTime.setDate(nextSyncDateTime.getDate() + 1);
         }
-        // For bi-weekly, ensure it's on the correct week interval from last sync
-        // This is a simplification; a truly robust bi-weekly sync would need a fixed start date
-        // For now, if the last sync was within the current week cycle, we might push it to next cycle.
+        
+        // For bi-weekly, ensure it's on the correct bi-weekly interval from last sync
         if (autoSyncSettings.frequency === 'bi-weekly' && autoSyncSettings.lastAutoSync) {
             const lastSyncDate = new Date(autoSyncSettings.lastAutoSync);
-            const daysSinceLastSync = Math.floor((nextSyncDateTime.getTime() - lastSyncDate.getTime()) / (24 * 60 * 60 * 1000));
-            // If the calculated nextSyncDateTime is within the same 7-day period as lastSyncDate,
-            // but the bi-weekly interval hasn't passed, push it to the next week.
-            if (daysSinceLastSync < 14) { // Only accurate if lastSyncDate was also on the targetDay
-                // More robust check needed: ensure nextSyncDateTime is at least 14 days after lastAutoSync.
-                // For simplicity, if current calculated nextSyncDateTime is before 14 days from last sync,
-                // we'll advance it by a week until it is.
-                while (nextSyncDateTime.getTime() - lastSyncDate.getTime() < 14 * 24 * 60 * 60 * 1000) {
-                     nextSyncDateTime.setDate(nextSyncDateTime.getDate() + 7);
-                }
+            // Calculate total days between last sync and current proposed next sync
+            const daysDifference = Math.floor((nextSyncDateTime.getTime() - lastSyncDate.getTime()) / (24 * 60 * 60 * 1000));
+            // If the difference is less than 14 days, and the target day is the same as the last sync,
+            // or if we are simply not on a valid 14-day cycle from the last sync point, push it forward.
+            // This is a simplified check. A more robust one would involve tracking the "start" week of the bi-weekly cycle.
+            if (daysDifference < 14) {
+                 nextSyncDateTime.setDate(nextSyncDateTime.getDate() + 7); // Push to next week
+                 // Re-check day of week if pushing forward, to ensure it's still the targetDay
+                 while (nextSyncDateTime.getDay() !== targetDay) {
+                    nextSyncDateTime.setDate(nextSyncDateTime.getDate() + 1);
+                 }
             }
         }
     } else if (autoSyncSettings.frequency === 'monthly') {
-        // For monthly, if the calculated nextSyncDateTime is still in the past, move it to next month
-        // This is primarily handled by the initial `nextSyncDateTime <= now` check, but for monthly,
-        // it should target the same day of the month as `now.getDate()`
-        // If the current day of month is past the scheduled day, set it for next month.
+        // For monthly, if the current day of month is past the scheduled day, set it for next month.
         if (now.getDate() > nextSyncDateTime.getDate()) {
             nextSyncDateTime.setMonth(nextSyncDateTime.getMonth() + 1);
         }
@@ -1616,6 +1633,7 @@ async function checkAndRunAutoSync() {
 
     if (!autoSyncSettings.enabled) {
         console.log('Auto sync is disabled. Skipping check.');
+        updateNextAutoSyncDisplay(); // Ensure display is updated even if disabled
         return;
     }
 
@@ -1633,17 +1651,15 @@ async function checkAndRunAutoSync() {
         while (lastScheduledSyncPoint.getDay() !== autoSyncSettings.day) {
             lastScheduledSyncPoint.setDate(lastScheduledSyncPoint.getDate() - 1);
         }
+        
         // If bi-weekly, ensure we are on the correct bi-weekly interval
-        // This is tricky. A simple approach is to check if enough time passed since last sync.
-        // For robust bi-weekly, you'd need a reference start date for the cycle.
-        // For simplicity, we'll primarily rely on `lastSyncTime` and `intervalMs`.
         if (autoSyncSettings.frequency === 'bi-weekly' && lastSyncTime) {
             const daysSinceLastSync = Math.floor((now.getTime() - lastSyncTime.getTime()) / (24 * 60 * 60 * 1000));
             if (daysSinceLastSync < 14) { // Not enough days passed for bi-weekly, so not due based on interval
                  syncDue = false; // Reset to false even if other conditions made it true
                  console.log('Auto sync not due bi-weekly interval yet.');
                  updateNextAutoSyncDisplay();
-                 return;
+                 return; // Exit here as no sync is due
             }
         }
 
@@ -1926,6 +1942,179 @@ function resetAnnouncedPrayersAction() {
 }
 
 
+/**
+ * Exports all data from IndexedDB stores to a JSON file.
+ */
+async function exportDataToJson() {
+    try {
+        const dataToExport = {};
+        const storeNames = [STORE_NAME, SYNC_HISTORY_STORE_NAME, SETTINGS_STORE_STORE_NAME];
+        const transaction = db.transaction(storeNames, 'readonly');
+
+        for (const storeName of storeNames) {
+            const store = transaction.objectStore(storeName);
+            dataToExport[storeName] = await new Promise((resolve, reject) => {
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        const jsonString = JSON.stringify(dataToExport, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `prayer-times-data-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showMessage('Export Complete', 'All data exported successfully to a JSON file.');
+        console.log('Data exported:', dataToExport);
+
+    } catch (error) {
+        console.error('Error exporting data:', error);
+        showMessage('Export Failed', `Failed to export data: ${error.message}`);
+    }
+}
+
+/**
+ * Imports data from a JSON file into IndexedDB stores.
+ */
+async function importDataFromJson() {
+    importFileInput.click(); // Trigger the hidden file input click
+}
+
+/**
+ * Handles the file selection for import.
+ * @param {Event} event - The file input change event.
+ */
+async function handleImportFileSelected(event) {
+    const file = event.target.files[0];
+    if (!file) {
+        return;
+    }
+
+    if (file.type !== 'application/json') {
+        showMessage('Import Failed', 'Please select a valid JSON file.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const importedData = JSON.parse(e.target.result);
+
+            // Basic validation of imported data structure
+            const expectedStores = [STORE_NAME, SYNC_HISTORY_STORE_NAME, SETTINGS_STORE_STORE_NAME];
+            for (const storeName of expectedStores) {
+                if (!Array.isArray(importedData[storeName])) {
+                    throw new Error(`Invalid data structure: missing or malformed '${storeName}' array.`);
+                }
+            }
+
+            // Confirm with user before proceeding with import (will overwrite existing data)
+            // Using a simple modal message due to no `confirm()` allowed.
+            showMessage('Confirm Import', 
+                `Importing this data will **overwrite all existing prayer times, sync history, and settings** in this app. Are you sure you want to proceed?
+                <br><br><button id="confirmImportBtn" class="btn btn-danger me-2">Yes, Overwrite</button><button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>`
+            );
+
+            // Add event listener to the dynamically created "Yes, Overwrite" button
+            document.getElementById('confirmImportBtn').onclick = async () => {
+                messageModal.hide(); // Hide the confirmation modal
+
+                try {
+                    // Clear all existing data in a single transaction
+                    const clearTransaction = db.transaction(expectedStores, 'readwrite');
+                    await Promise.all(expectedStores.map(storeName => {
+                        return new Promise((resolve, reject) => {
+                            const clearRequest = clearTransaction.objectStore(storeName).clear();
+                            clearRequest.onsuccess = () => resolve();
+                            clearRequest.onerror = () => reject(clearRequest.error);
+                        });
+                    }));
+                    await new Promise(resolve => clearTransaction.oncomplete = resolve);
+                    console.log("All existing data cleared.");
+
+                    // Start a new transaction to add the imported data
+                    const importTransaction = db.transaction(expectedStores, 'readwrite');
+                    
+                    // Import prayerTimesStore data
+                    const prayerTimesStore = importTransaction.objectStore(STORE_NAME);
+                    for (const item of importedData[STORE_NAME]) {
+                        await new Promise((resolve, reject) => {
+                            const request = prayerTimesStore.add(item); // Use add, assuming 'id' is unique
+                            request.onsuccess = () => resolve();
+                            request.onerror = (e) => {
+                                // If it's a constraint error (duplicate ID), use put to overwrite
+                                if (e.target.error.name === 'ConstraintError') {
+                                    console.warn(`Duplicate ID found in ${STORE_NAME}. Overwriting.`);
+                                    const putRequest = prayerTimesStore.put(item);
+                                    putRequest.onsuccess = () => resolve();
+                                    putRequest.onerror = (putError) => reject(putError);
+                                } else {
+                                    reject(e.target.error);
+                                }
+                            };
+                        });
+                    }
+
+                    // Import syncHistoryStore data (use add, as IDs are auto-incremented and should be unique)
+                    const syncHistoryStore = importTransaction.objectStore(SYNC_HISTORY_STORE_NAME);
+                    for (const item of importedData[SYNC_HISTORY_STORE_NAME]) {
+                         // Remove existing ID as it's auto-incremented on add
+                        const { id, ...rest } = item; 
+                        await new Promise((resolve, reject) => {
+                            const request = syncHistoryStore.add(rest); // Add without original ID
+                            request.onsuccess = () => resolve();
+                            request.onerror = (e) => {
+                                console.warn(`Could not import sync history record:`, item, e.target.error);
+                                resolve(); // Don't block import for individual history record failures
+                            };
+                        });
+                    }
+
+                    // Import appSettingsStore data (use put, as 'name' is the keyPath and can be overwritten)
+                    const appSettingsStore = importTransaction.objectStore(SETTINGS_STORE_STORE_NAME);
+                    for (const item of importedData[SETTINGS_STORE_STORE_NAME]) {
+                        await new Promise((resolve, reject) => {
+                            const request = appSettingsStore.put(item); // Use put to overwrite existing settings
+                            request.onsuccess = () => resolve();
+                            request.onerror = () => reject(request.error);
+                        });
+                    }
+
+                    await new Promise(resolve => importTransaction.oncomplete = resolve);
+                    
+                    showMessage('Import Successful', 'Data imported successfully! The app will now refresh.');
+                    console.log('Data imported successfully. Reloading app...');
+                    setTimeout(() => location.reload(), 2000); // Reload after 2 seconds
+
+                } catch (dbError) {
+                    console.error('Error during database import operation:', dbError);
+                    showMessage('Import Failed', `An error occurred during data import: ${dbError.message}. Data might be incomplete or corrupted. Please try again.`);
+                }
+            };
+
+        } catch (parseError) {
+            console.error('Error parsing imported JSON:', parseError);
+            showMessage('Import Failed', `Invalid JSON file: ${parseError.message}. Please ensure the file is correctly formatted.`);
+        }
+    };
+    reader.onerror = () => {
+        console.error('FileReader error:', reader.error);
+        showMessage('Import Failed', 'Could not read the selected file.');
+    };
+    reader.readAsText(file);
+    // Clear the file input value so that the same file can be selected again
+    importFileInput.value = '';
+}
+
+
 // Event Listeners
 document.addEventListener('DOMContentLoaded', async () => {
     // Request notification permission on load
@@ -2097,6 +2286,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     returnToMainBtn.addEventListener('click', returnToMainAction);
     resetAnnouncedPrayersBtn.addEventListener('click', resetAnnouncedPrayersAction);
 
+    // Data Import/Export Listeners
+    exportDataBtn.addEventListener('click', exportDataToJson);
+    importDataBtn.addEventListener('click', importDataFromJson);
+    importFileInput.addEventListener('change', handleImportFileSelected);
 
     // Initial setup of display to 'main'
     showDisplay('main');

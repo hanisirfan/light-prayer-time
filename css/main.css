@@ -19,308 +19,183 @@
     --offcanvas-bg: #ffffff; /* Offcanvas background */
     --offcanvas-heading-color: #212529; /* Dark text for light mode offcanvas headings */
     --list-group-item-bg: #f8f9fa; /* For list group items in light mode */
-    --list-group-item-border: rgba(0, 0, 0, 0.125);
-    --iqama-countdown-danger-color: #dc3545; /* Bootstrap danger red */
-    --iqama-countdown-warning-color: #ffc107; /* Bootstrap warning orange */
-    --input-placeholder-color: #6c757d; /* Default placeholder color for light mode */
+    --list-group-item-border: rgba(0, 0, 0, 0.125); /* Default list-group-item border */
+
+    /* Dark Mode Variables (prefixed with --dark-) */
+    --dark-body-bg: #212529; /* Dark gray */
+    --dark-display-section-bg: #2b3035; /* Slightly lighter dark gray */
+    --dark-table-section-bg: #2b3035;
+    --dark-text-color: #f8f9fa; /* Light white */
+    --dark-heading-color: #ffffff; /* A softer blue for dark mode */
+    --dark-muted-text-color: #adb5bd; /* Lighter gray */
+    --dark-border-color: #495057;
+    --dark-table-header-bg: #0d6efd; /* Keep primary blue or adjust if needed */
+    --dark-table-header-color: white;
+    --dark-table-stripe-bg: #343a40; /* Darker gray for stripes */
+    --dark-table-even-row-bg: #2b3035; /* Explicitly define even row bg for dark mode */
+    --dark-table-hover-bg: #495057;
+    --dark-prayer-status-box-bg: #495057; /* Darker gray for next prayer box */
+    --dark-next-prayer-countdown-color: #28a745; /* Green for success */
+    --dark-offcanvas-bg: #2b3035; /* Offcanvas background */
+    --dark-offcanvas-heading-color: #f8f9fa; /* Light text for dark mode offcanvas headings */
+    --dark-list-group-item-bg: #343a40; /* For list group items in dark mode */
+    --dark-list-group-item-border: rgba(255, 255, 255, 0.125); /* Lighter border for dark mode */
 }
 
-body.dark-mode {
-    /* Dark Mode Variables */
-    --body-bg: #212529; /* Dark overall background */
-    --display-section-bg: #343a40; /* Darker background for top display section */
-    --table-section-bg: #343a40; /* Darker background for bottom table section */
-    --text-color: #e9ecef; /* Light text */
-    --heading-color: #6a92ff; /* Lighter blue for headings */
-    --muted-text-color: #ced4da;
-    --border-color: #495057;
-    --table-header-bg: #007bff; /* Darker blue for table header */
-    --table-header-color: white;
-    --table-stripe-bg: #495057; /* Darker stripe color */
-    --table-even-row-bg: #343a40; /* Explicitly define even row bg for dark mode */
-    --table-hover-bg: #6c757d; /* Darker hover color */
-    --prayer-status-box-bg: #495057;
-    --next-prayer-countdown-color: #28a745; /* Darker green */
-    --offcanvas-bg: #343a40; /* Offcanvas background in dark mode */
-    --offcanvas-heading-color: #e9ecef; /* Light text for dark mode offcanvas headings */
-    --list-group-item-bg: #495057; /* For list group items in dark mode */
-    --list-group-item-border: rgba(255, 255, 255, 0.125);
-    --iqama-countdown-danger-color: #fd7e14; /* Orange-red for dark mode danger */
-    --iqama-countdown-warning-color: #ffda6a; /* Lighter orange for dark mode warning */
-    --input-placeholder-color: #adb5bd; /* Lighter placeholder color for dark mode */
-}
-
+/* Base styles using light mode variables */
 body {
-    font-family: 'Poppins', sans-serif; /* Changed font to Poppins */
+    font-family: 'Poppins', sans-serif;
     background-color: var(--body-bg);
-    min-height: 100vh; /* Ensure body covers full viewport height */
-    display: flex; /* Use flexbox for vertical layout of sections */
-    flex-direction: column; /* Stack sections vertically */
-    justify-content: flex-start; /* Align sections to top */
-    align-items: stretch; /* Stretch items to fill width */
-    padding: 0; /* Remove body padding to allow full width sections */
-    margin: 0; /* Remove default body margin */
     color: var(--text-color);
     transition: background-color 0.3s ease, color 0.3s ease;
-    overflow-x: hidden; /* Prevent horizontal scrollbar on body from layout issues */
+    min-height: 100vh; /* Ensure body takes full viewport height */
 }
 
-/* Settings button fixed positioning */
-.settings-button {
-    position: fixed;
-    top: 1rem;
-    right: 1rem;
-    z-index: 1050; /* Above modals/offcanvas */
-    width: 45px;
-    height: 45px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.2); /* Keep a subtle shadow */
-    transition: background-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
-}
-
-
-/* New Display Section styling */
-.display-section {
-    width: 100%;
-    background-color: var(--display-section-bg);
-    transition: background-color 0.3s ease;
-    display: flex; /* Use flex for content alignment */
-    flex-direction: column;
-    justify-content: center; /* Center content vertically within the section */
-    align-items: center; /* Center content horizontally within the section */
-    min-height: 70vh; /* Adjusted minimum height to 70% of viewport height */
-    flex-grow: 1; /* Allow to grow more if content demands it, but min-height is dominant */
-    position: relative; /* For absolute positioning of sub-displays */
-}
-
-/* Base style for all display mode content divs */
-.display-mode-content {
-    width: 100%;
-    height: 100%; /* Take full height of parent display-section */
-    display: none; /* Hidden by default, JS will toggle active-display */
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    position: absolute; /* Position relative to display-section */
-    top: 0;
-    left: 0;
-    opacity: 0;
-    transition: opacity 0.5s ease-in-out; /* Smooth transition */
-}
-
-.display-mode-content.active-display {
-    display: flex; /* Use flex for centering content */
-    opacity: 1;
-}
-
-/* Specific styling for new display content */
-#prayerAnnouncementDisplay p,
-#iqamaCountdownDisplay p,
-#postIqamaMessageDisplay p {
-    margin-bottom: 0.5rem; /* Default margin for text elements */
-}
-
-#prayerAnnouncementDisplay .display-3 {
-    font-size: 3.5rem; /* PRAYER_NAME */
-}
-#prayerAnnouncementDisplay .h1 {
-    font-size: 2.2rem; /* "Now it is time for prayer:" */
-}
-#prayerAnnouncementDisplay .h2 {
-    font-size: 1.8rem; /* PRAYER_TIME */
-}
-#prayerAnnouncementDisplay .h3 {
-    font-size: 1.5rem; /* ZONE_NAME */
-}
-
-#iqamaCountdownDisplay .display-1 {
-    font-size: 5.5rem; /* COUNTDOWN_TO_IQAMA - Biggest and bold */
-}
-#iqamaCountdownDisplay .h2 {
-    font-size: 2rem; /* PRAYER_NAME */
-}
-#iqamaCountdownDisplay .h3 {
-    font-size: 1.5rem; /* PRAYER_TIME */
-}
-#iqamaCountdownDisplay .h4 {
-    font-size: 1.2rem; /* ZONE_NAME */
-}
-
-/* Added bold weight to Iqama in: text */
-.iqama-in-text {
-    font-weight: bold !important;
-}
-
-
-#postIqamaMessageDisplay .display-4 {
-    font-size: 2.5rem; /* "Straighten your rows..." */
-}
-#postIqamaMessageDisplay .h1 {
-    font-size: 2.2rem; /* "Please silent your phone..." */
-}
-#postIqamaMessageDisplay .h5 {
-    font-size: 1.2rem; /* Sahih Muslim reference */
-    font-style: italic;
-}
-
-/* New: Styles for countdown containers and subtitles */
-.countdown-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    margin-top: 0.5rem; /* Adjust spacing as needed */
-}
-
-.countdown-subtitle {
-    font-size: 1rem; /* Increased font size for subtitle */
-    /* Removed margin-top: -0.8rem; */
-    opacity: 1; /* Opacity to 1 */
-}
-
-
-/* New Prayer Table Section styling */
-.prayer-table-section {
-    width: 100%;
-    background-color: var(--table-section-bg);
-    border-top: 1px solid var(--border-color); /* Separator line between sections */
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-    display: flex; /* Use flex for layout */
-    flex-direction: column;
-    justify-content: flex-start; /* Align table to top of section */
-    align-items: stretch; /* Stretch table container to full width */
-    flex-grow: 1; /* Allow this section to take remaining vertical space */
-}
-
-/* Table container styling - now just for the p-3 border */
-.table-container {
-    border-radius: 0;
-    /* Removed padding: 1rem; */
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-    width: 100%;
-}
-
-/* Mosque Name Display Styling */
-#mosqueNameDisplay {
-    font-style: oblique; /* Added oblique font style */
-    color: var(--text-color) !important;
-    margin: 0; /* Remove all margins */
-    margin-top: 0.7rem; /* Added margin-top */
-    white-space: nowrap; /* Keep text on single line */
-    overflow: hidden; /* Hide overflow */
-    box-sizing: border-box; /* Ensure padding/border included in width */
-    /* Marquee animation */
-    animation: marquee 15s linear infinite; /* Adjust duration as needed */
-}
-
-@keyframes marquee {
-    0% { transform: translateX(100%); } /* Start from right (off-screen) */
-    100% { transform: translateX(-100%); } /* Move to left (off-screen) */
-}
-
-
-/* Ensure text colors correctly use variables in general */
-.text-primary {
-    color: var(--heading-color) !important;
-}
-
-.text-secondary {
-    color: var(--muted-text-color) !important;
+p {
+    color: var(--text-color);
+    transition: color 0.3s ease;
 }
 
 .text-muted {
     color: var(--muted-text-color) !important;
+    transition: color 0.3s ease;
 }
 
-/* Specific text colors for countdowns */
-.text-success {
-    color: var(--next-prayer-countdown-color) !important; /* For next prayer countdown (green) */
+.display-section,
+.prayer-table-section .table-container {
+    background-color: var(--display-section-bg);
+    border-radius: 0.75rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1rem;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.text-danger-custom { /* Custom class for the Iqama countdown red */
-    color: var(--iqama-countdown-danger-color) !important;
+/* Global padding for sections on desktop */
+.display-section {
+    padding: 0;
+    height: 70vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
 }
 
-.text-warning-custom { /* Custom class for the Iqama countdown orange */
-    color: var(--iqama-countdown-warning-color) !important;
+.prayer-table-section {
+    padding: 0; /* New: Removed padding */
+    height: 25vh;
+    overflow: hidden;
 }
-
-
-.form-select, .btn {
-    border-radius: 0.5rem; /* Keep rounded buttons/selects */
-}
-
-.form-select {
-    background-color: var(--offcanvas-bg);
-    color: var(--text-color);
-    border-color: var(--border-color);
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-.form-select option {
-    background-color: var(--offcanvas-bg);
-    color: var(--text-color);
-}
-
-.form-control {
-    background-color: var(--offcanvas-bg);
-    color: var(--text-color);
-    border-color: var(--border-color);
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-}
-
-/* Placeholder styling for form controls */
-.form-control::placeholder {
-  color: var(--input-placeholder-color);
-  opacity: 1;
-}
-body.dark-mode .form-control::placeholder {
-  color: var(--input-placeholder-color);
+.prayer-table-section .table-container {
+    padding: 1rem;
 }
 
 
-.form-control:focus {
-    background-color: var(--offcanvas-bg);
-    color: var(--text-color);
-    border-color: var(--heading-color);
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+/* Dark mode styles */
+body.dark-mode {
+    background-color: var(--dark-body-bg);
+    color: var(--dark-text-color);
 }
 
-.btn-primary {
-    --bs-btn-bg: var(--heading-color);
-    --bs-btn-border-color: var(--heading-color);
-    --bs-btn-hover-bg: #0a58ca;
-    --bs-btn-hover-border-color: #0a58ca;
-    --bs-btn-active-bg: #084298;
-    --bs-btn-active-border-color: #084298;
-    --bs-btn-disabled-bg: var(--heading-color);
-    --bs-btn-disabled-border-color: var(--heading-color);
-    transition: all 0.3s ease;
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6 {
+    color: var(--dark-heading-color);
 }
 
-.btn-warning {
-    --bs-btn-bg: #ffc107;
-    --bs-btn-border-color: #ffc107;
-    --bs-btn-hover-bg: #e0a800;
-    --bs-btn-hover-border-color: #d39e00;
-    color: #212529;
-    transition: all 0.3s ease;
+body.dark-mode p {
+    color: var(--dark-text-color);
 }
 
-body.dark-mode .btn-warning {
-    --bs-btn-bg: #ffc107;
-    --bs-btn-border-color: #ffc107;
-    --bs-btn-hover-bg: #e0a800;
-    --bs-btn-hover-border-color: #d39e00;
-    --bs-btn-active-bg: #c69500;
-    --bs-btn-active-border-color: #b98b00;
-    color: #212529;
+body.dark-mode .text-muted {
+    color: var(--dark-muted-text-color) !important;
+}
+
+body.dark-mode .display-section,
+body.dark-mode .prayer-table-section .table-container {
+    background-color: var(--dark-display-section-bg);
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.2);
+}
+
+/* Specific component overrides for dark mode */
+body.dark-mode .prayer-status-box {
+    background-color: var(--dark-prayer-status-box-bg);
+    border-color: var(--dark-border-color);
+}
+
+body.dark-mode .next-prayer-countdown-color {
+    color: var(--dark-next-prayer-countdown-color);
+}
+
+/* Table styling for light and dark mode */
+.table {
+    --bs-table-bg: var(--table-section-bg); /* Use section background as default */
+    --bs-table-striped-bg: var(--table-stripe-bg);
+    --bs-table-hover-bg: var(--table-hover-bg);
+    color: var(--text-color); /* Default text color for table */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.table thead th {
+    background-color: var(--table-header-bg);
+    color: var(--table-header-color);
+    border-color: var(--border-color); /* Ensure header borders match theme */
+    font-size: 1.5rem; /* Increased header font size */
+}
+
+.table tbody tr:nth-of-type(odd) {
+    background-color: var(--table-even-row-bg); /* Explicitly for odd rows to be 'even' themed */
+}
+
+.table tbody td,
+.table tfoot td {
+    font-size: 1.5rem; /* Increased font size for table content */
+    vertical-align: middle; /* Align content vertically in middle */
+}
+
+/* Dark mode specific table overrides */
+body.dark-mode .table {
+    --bs-table-bg: var(--dark-table-section-bg);
+    --bs-table-striped-bg: var(--dark-table-stripe-bg);
+    --bs-table-hover-bg: var(--dark-table-hover-bg);
+    color: var(--dark-text-color);
+}
+
+body.dark-mode .table thead th {
+    border-color: var(--dark-border-color);
+}
+
+body.dark-mode .table tbody tr:nth-of-type(odd) {
+    background-color: var(--dark-table-even-row-bg);
 }
 
 
+/* Settings Button */
+.settings-button {
+    position: fixed;
+    top: 1rem; /* 16px from top */
+    left: 1rem; /* 16px from left */
+    z-index: 1050; /* Above offcanvas, below modal */
+    border-radius: 50%; /* Make it round */
+    width: 3rem; /* Fixed width */
+    height: 3rem; /* Fixed height */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0; /* Remove padding for perfect circle */
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.2);
+    transition: all 0.2s ease-in-out;
+}
+
+.settings-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.3);
+}
+
+/* Offcanvas */
 .offcanvas {
     background-color: var(--offcanvas-bg);
     color: var(--text-color);
@@ -328,307 +203,297 @@ body.dark-mode .btn-warning {
 }
 
 .offcanvas-header {
-    background-color: var(--table-header-bg) !important;
-    color: var(--table-header-color) !important;
+    background-color: var(--table-header-bg);
+    color: var(--table-header-color);
     border-bottom: 1px solid var(--border-color);
+}
+body.dark-mode .offcanvas-header {
+    background-color: var(--dark-table-header-bg);
+    color: var(--dark-table-header-color);
+    border-bottom-color: var(--dark-border-color);
+}
+
+.offcanvas-title {
+    color: var(--offcanvas-heading-color);
+}
+body.dark-mode .offcanvas-title {
+    color: var(--dark-offcanvas-heading-color);
+}
+
+.offcanvas-body {
+    padding: 1.5rem;
+}
+
+.offcanvas-body .form-label,
+.offcanvas-body .form-check-label {
+    color: var(--text-color);
+}
+body.dark-mode .offcanvas-body .form-label,
+body.dark-mode .offcanvas-body .form-check-label {
+    color: var(--dark-text-color);
 }
 
 .offcanvas-body hr {
-    border-color: var(--border-color);
-}
-
-.form-check-label {
-    color: var(--text-color);
-}
-
-/* Apply color to the headings in the offcanvas body */
-.offcanvas-body .text-muted {
-    color: var(--offcanvas-heading-color) !important;
-    transition: color 0.3s ease;
-}
-
-
-/* Specific styling for the prayer times table */
-.table {
-    width: 100%;
-    table-layout: fixed;
-    border-color: var(--border-color);
-    transition: all 0.3s ease;
-    border-collapse: collapse;
-}
-
-.table thead th {
-    background-color: var(--table-header-bg) !important;
-    color: var(--table-header-color) !important;
-    vertical-align: middle;
-    padding: 0.75rem;
-    font-size: 1.7rem; /* Increased font size */
-    border-bottom: 2px solid var(--table-header-bg);
-    text-align: center;
-    transition: background-color 0.3s ease, color 0.3s ease;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
-}
-.table thead th:last-child {
-    border-right: none;
-}
-
-/* Table body and footer cells */
-.table tbody td,
-.table tfoot td {
-    vertical-align: middle;
-    padding: 0.75rem;
-    font-size: 1.7rem; /* Increased font size */
-    font-weight: 700;
-    text-align: center;
     border-top: 1px solid var(--border-color);
-    border-right: 1px solid var(--border-color);
+    opacity: 1; /* Ensure visibility */
+}
+
+body.dark-mode .offcanvas-body hr {
+    border-top: 1px solid var(--dark-border-color);
+}
+
+body.dark-mode .offcanvas {
+    --offcanvas-bg: var(--dark-display-section-bg); /* Offcanvas background dark */
+}
+
+body.dark-mode .header-section {
+    background-color: var(--dark-display-section-bg);
+}
+
+body.dark-mode .table-container {
+    background-color: var(--dark-display-section-bg);
+}
+
+.form-control, .form-select {
+    background-color: var(--display-section-bg); /* Use display section background for inputs */
     color: var(--text-color);
-    transition: color 0.3s ease, border-color 0.3s ease;
-}
-.table tbody td:last-child,
-.table tfoot td:last-child {
-    border-right: none;
-}
-
-
-/* Override Bootstrap .table-striped and .table-dark .table-striped for consistency */
-/* Apply direct background colors to tbody rows, relying on .table-dark for overall theme */
-.table tbody tr:nth-of-type(odd) {
-  background-color: var(--table-stripe-bg);
-}
-
-.table tbody tr:nth-of-type(even) {
-    background-color: var(--table-even-row-bg);
-}
-
-/* Ensure Iqama row matches the even row styling to avoid stripe conflict */
-.table tfoot tr {
-    background-color: var(--table-even-row-bg) !important;
-    font-weight: bold;
-    border-top: 2px solid var(--border-color);
+    border-color: var(--border-color);
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
-
-.table-hover > tbody > tr:hover > * {
-    background-color: var(--table-hover-bg) !important;
+body.dark-mode .form-control, body.dark-mode .form-select {
+    background-color: var(--dark-display-section-bg);
+    color: var(--dark-text-color);
+    border-color: var(--dark-border-color);
+}
+body.dark-mode .form-control::placeholder { /* For placeholder text in dark mode */
+    color: var(--dark-muted-text-color);
 }
 
-/* Highlight for current day */
-.highlight-today {
-    background-color: var(--heading-color) !important;
-    color: white !important;
-    font-weight: bold;
+.list-group-item {
+    background-color: var(--list-group-item-bg);
+    border-color: var(--list-group-item-border);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+body.dark-mode .list-group-item {
+    background-color: var(--dark-list-group-item-bg);
+    border-color: var(--dark-list-group-item-border);
+    color: var(--dark-text-color); /* Ensure text color is readable */
 }
 
-
-.spinner-border-sm {
-    width: 1rem;
-    height: 1rem;
-    border-width: 0.15em;
-}
-
-/* Clock and Date styling */
+/* Current Time Display */
 #currentTime {
-    font-weight: bold;
-    color: var(--text-color);
-    font-size: 3.5rem;
-    transition: color 0.3s ease;
+    font-feature-settings: "tnum"; /* Tabular numbers for consistent width */
+    font-variant-numeric: tabular-nums;
 }
 
-#currentMiladiDate, #currentHijriDate {
-    color: var(--muted-text-color);
-    font-size: 1.2rem;
-    transition: color 0.3s ease;
-}
-
-#selectedLocationDisplay {
-    /* Removed font-weight: bold; */
-    color: var(--heading-color);
-    font-size: 1.5rem;
-    transition: color 0.3s ease;
-}
-
+/* Next Prayer Box */
 .prayer-status-box {
     background-color: var(--prayer-status-box-bg);
     border: 1px solid var(--border-color);
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-    max-width: 350px;
-    width: 80%;
-    /* Adjusted margins */
-    margin-top: 1.5rem; /* Increased top margin */
-    margin-bottom: 1.5rem; /* Increased bottom margin */
-    padding: 1.5rem; /* Increased internal padding */
-    border-radius: 0.5rem;
-    display: flex; /* Use flexbox for internal layout */
-    flex-direction: column; /* Stack items vertically */
-    align-items: center; /* Center items horizontally */
+    border-radius: 0.75rem;
+    padding: 3rem;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Specific margins for elements within prayer-status-box */
-.prayer-status-box p {
-    margin-bottom: 0.5rem; /* Default spacing */
-}
-
-/* More specific adjustments for next prayer status elements */
-.prayer-status-box #nextPrayerName {
-    margin-bottom: 0.5rem; /* Space below Next Prayer name */
-}
-
-.next-prayer-time-display {
-    font-size: 1.75rem !important; /* Increased font size for nextPrayerTime */
-    margin-bottom: 0.75rem; /* Space below next prayer time */
-}
-
-.prayer-status-box .countdown-container {
-    margin-top: 0.75rem; /* Space between time and countdown */
-}
-
-
-#nextPrayerName {
-    color: var(--text-color);
-    transition: color 0.3s ease;
-    font-weight: bold; /* Added bold weight */
-}
-
-
+/* Countdown color for main display */
 #countdownToNextPrayer {
     color: var(--next-prayer-countdown-color);
-    transition: color 0.3s ease;
+    font-feature-settings: "tnum"; /* Tabular numbers */
+    font-variant-numeric: tabular-nums;
 }
 
-/* List group for sync history */
-.list-group-item {
-    background-color: var(--list-group-item-bg);
-    color: var(--text-color);
-    border-color: var(--list-group-item-border);
-    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+/* Custom colors for Iqama countdown */
+.text-success-custom { color: #28a745 !important; } /* Green */
+.text-warning-custom { color: #ffc107 !important; } /* Orange */
+.text-danger-custom { color: #dc3545 !important; } /* Red */
+
+/* Display Mode Content Switching - Centering elements within */
+.display-mode-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: none; /* Hidden by default */
+    opacity: 0;
+    transition: opacity 0.5s ease-in-out;
+    /* New: Flex properties for centering content */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center; /* Ensure text is centered within flex item */
+    height: 100%; /* Ensure flex container takes full height of parent */
+    width: 100%;
 }
 
-/* Specific style for collapsed content */
-.sync-detail-content {
-    background-color: rgba(0, 0, 0, 0.05);
-    border-top: 1px solid var(--border-color);
-    padding: 0.5rem;
-    margin-top: 0.5rem;
-    border-radius: 0.25rem;
+.display-mode-content.active-display {
+    display: flex; /* Changed from block to flex */
+    opacity: 1;
 }
 
-.sync-detail-content pre {
-    white-space: pre-wrap;
-    word-break: break-word;
-    font-size: 0.85em;
-    color: var(--text-color);
-    margin-bottom: 0;
+/* Sync History List Button & Collapse */
+.list-group-item.d-flex {
+    align-items: flex-start; /* Align content to the top of the item */
 }
 
-/* Style for the collapse toggle button */
-.collapse-toggle-btn {
-    background: none;
-    border: none;
-    color: var(--heading-color);
-    padding: 0;
-    margin-left: 0.5rem;
-    font-size: 0.9rem;
+.list-group-item .collapse-toggle-btn {
+    margin-top: 0.25rem; /* Align button better with text */
+    padding: 0.25rem 0.5rem; /* Smaller padding */
+    font-size: 0.8rem; /* Smaller font */
+    border-radius: 0.5rem;
+}
+.list-group-item .collapse-toggle-btn .bi {
     transition: transform 0.2s ease-in-out;
 }
-
-.collapse-toggle-btn.collapsed .bi-chevron-down {
-    transform: rotate(0deg);
-}
-
-.collapse-toggle-btn .bi-chevron-down {
+.list-group-item .collapse-toggle-btn[aria-expanded="true"] .bi {
     transform: rotate(180deg);
 }
 
+.sync-detail-content pre {
+    background-color: var(--body-bg); /* Use body bg for pre to contrast */
+    color: var(--text-color);
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    white-space: pre-wrap; /* Ensure long lines wrap */
+    word-break: break-all; /* Break words for very long strings */
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
+body.dark-mode .sync-detail-content pre {
+    background-color: var(--dark-body-bg);
+    color: var(--dark-text-color);
+}
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-    .d-flex.flex-md-row {
-        flex-direction: column !important;
-    }
-    .d-flex.flex-md-row > .d-none.d-md-block {
-        display: none !important;
-    }
-    .d-flex.flex-md-row > * {
-        margin-bottom: 0.2rem !important;
-    }
 
-    #currentTime {
-        font-size: 2.8rem;
-    }
-    #currentMiladiDate, #currentHijriDate {
-        font-size: 1rem;
-    }
-    #selectedLocationDisplay {
+/* Mobile Responsiveness */
+@media (max-width: 767.98px) {
+    .settings-button {
+        top: 0.5rem; /* Adjust for smaller top margin on mobile */
+        left: 0.5rem; /* Adjust for smaller left margin on mobile */
+        width: 2.5rem; /* Smaller button on mobile */
+        height: 2.5rem;
         font-size: 1.2rem;
-        max-width: 100%;
-        padding: 0 10px;
     }
-    .prayer-status-box p {
-        font-size: 1rem !important;
-    }
-    .prayer-status-box #countdownToNextPrayer {
-        font-size: 1.8rem !important;
-    }
-    .table tbody td, .table tfoot td {
-        font-size: 1.2rem; /* Adjusted for mobile view */
-        padding: 0.5rem;
-    }
-    .table thead th {
-        font-size: 1rem; /* Adjusted for mobile view */
-        padding: 0.4rem;
-        white-space: nowrap;
+    .settings-button .bi {
+        font-size: 1.2rem !important; /* Adjust icon size */
     }
 
-    /* Force a minimum width on the table itself when in table-responsive container on small screens */
+    .display-5 {
+        font-size: 3rem; /* Adjust current time font size for mobile */
+    }
+
+    .display-section,
+    .prayer-table-section {
+        padding-left: 1rem; /* Adjust section padding for mobile */
+        padding-right: 1rem;
+    }
+    .display-section .h5 {
+        font-size: 0.9rem; /* Smaller font for dates on mobile */
+    }
+    .prayer-status-box {
+        padding: 0.75rem; /* Smaller padding for next prayer box */
+    }
+    .prayer-status-box .h3 {
+        font-size: 1.1rem; /* Smaller next prayer name */
+    }
+    .prayer-status-box .h5 {
+        font-size: 1rem; /* Smaller next prayer time */
+    }
+    .prayer-status-box .h2 {
+        font-size: 1.8rem; /* Smaller countdown */
+    }
+
+    .table thead th,
+    .table tbody td,
+    .table tfoot td {
+        font-size: 0.9rem; /* Smaller table font size for mobile */
+        padding: 0.4rem; /* Smaller padding */
+    }
+    /* Ensure table is scrollable if content overflows */
     .table-responsive > .table {
-        min-width: 650px;
+        min-width: 600px; /* Adjust as needed to allow horizontal scrolling */
     }
-    
-    /* Ensure full width for sections on small screens and remove external padding */
-    .display-section, .prayer-table-section {
-        padding-left: 0;
-        padding-right: 0;
-    }
+
     /* Specific padding for content within display section on mobile */
     .display-section {
-        padding-top: 1rem;
-        padding-bottom: 1rem;
+        padding-top: 1rem; /* Adjust top padding for mobile */
+        padding-bottom: 1rem; /* Adjust bottom padding for mobile */
     }
     .prayer-table-section {
-        padding-top: 0.5rem;
-        padding-bottom: 0.5rem;
+        padding-top: 0.5rem; /* Reduce top padding for prayer table section on mobile */
+        padding-bottom: 0.5rem; /* Reduce bottom padding for prayer table section on mobile */
     }
     .table-container {
-        padding: 0.5rem;
+        padding: 0.5rem; /* Reduce inner padding for table container on mobile */
     }
 
 }
 
+
 /* Desktop / Larger Screens Font Size for Table */
-@media (min-width: 992px) {
+@media (min-width: 992px) { /* Adjust breakpoint as needed (lg breakpoint in Bootstrap) */
     .table tbody td,
     .table tfoot td {
-        font-size: 1.7rem; /* Maintain requested font size for desktop */
+        font-size: 1.5rem; /* Keep increased font size for desktop */
     }
     .table thead th {
-        font-size: 1.7rem; /* Maintain requested font size for desktop */
+        font-size: 1.5rem; /* Keep increased header font size for desktop */
     }
 }
 
 
 /* Keep these modal stylings, they apply to all modals */
 .modal-content {
-    background-color: var(--offcanvas-bg);
+    background-color: var(--offcanvas-bg); /* Use offcanvas bg for modals */
     color: var(--text-color);
-    border-radius: 0.75rem;
+    border-radius: 0.75rem; /* Keep slight rounding for modals */
 }
 .modal-header {
-    background-color: var(--table-header-bg) !important;
-    color: var(--table-header-color) !important;
-    border-bottom: 1px solid var(--border-color) !important;
+    background-color: var(--table-header-bg); /* Use table header bg for modal header */
+    color: var(--table-header-color);
+    border-bottom: 1px solid var(--border-color);
+}
+body.dark-mode .modal-header {
+    background-color: var(--dark-table-header-bg);
+    color: var(--dark-table-header-color);
+    border-bottom-color: var(--dark-border-color);
+}
+.modal-body { /* Ensure modal body uses consistent background */
+    background-color: var(--offcanvas-bg);
+    color: var(--text-color);
+}
+body.dark-mode .modal-body {
+    background-color: var(--dark-offcanvas-bg);
+    color: var(--dark-text-color);
 }
 .modal-footer {
-    border-top: 1px solid var(--border-color) !important;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--offcanvas-bg); /* Ensure modal footer uses consistent background */
+}
+body.dark-mode .modal-footer {
+    border-top-color: var(--dark-border-color);
+    background-color: var(--dark-offcanvas-bg);
+}
+
+
+.btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%); /* Makes close button white */
+}
+body.dark-mode .btn-close {
+    filter: none; /* Reset filter for dark mode if default is good */
+}
+
+/* Adjustments for Announcement/Iqama Displays */
+#prayerAnnouncementDisplay .display-3,
+#iqamaCountdownDisplay .display-1 {
+    font-feature-settings: "tnum"; /* Tabular numbers for consistent width */
+    font-variant-numeric: tabular-nums;
+}
+
+/* Ensure buttons in Offcanvas have consistent padding and rounded corners */
+.offcanvas .btn {
+    border-radius: 0.5rem; /* Slightly less rounded than full pills, more subtle */
+    padding: 0.75rem 1rem;
 }

@@ -30,18 +30,18 @@
     <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-    <!-- Notification Audio Element (NEW) -->
+    <!-- Notification Audio Element -->
     <audio id="notificationSound" src="audio/notification1.mp3" preload="auto"></audio>
 
-    <!-- Settings Button (Fixed at top-right of viewport) -->
+    <!-- Settings Button (Fixed at top-left of viewport) -->
     <button class="btn btn-primary settings-button" type="button" data-bs-toggle="offcanvas" data-bs-target="#settingsOffcanvas" aria-controls="settingsOffcanvas">
         <i class="bi bi-gear-fill fs-5"></i>
     </button>
 
     <!-- Display Section (Top full-width section) -->
-    <div class="display-section text-center">
+    <div class="display-section">
         <!-- Main Display Content -->
-        <div id="mainDisplayContent" class="display-mode-content active-display">
+        <div id="mainDisplayContent" class="display-mode-content active-display" style="z-index: 100;">
             <!-- Miladi Date | Hijri Date -->
             <div class="d-flex flex-column flex-md-row justify-content-center align-items-center gap-2 mb-2">
                 <p class="h5 mb-0 text-muted" id="currentMiladiDate">Loading Miladi Date...</p>
@@ -64,16 +64,16 @@
             </div>
         </div>
 
-        <!-- Prayer Announcement Display (NEW) -->
-        <div id="prayerAnnouncementDisplay" class="display-mode-content">
+        <!-- Prayer Announcement Display -->
+        <div id="prayerAnnouncementDisplay" class="display-mode-content" style="z-index: 95;">
             <p class="h1 mb-3">Now it is time for prayer:</p>
             <p class="display-3 fw-bold text-primary mb-2" id="announcementPrayerName">PRAYER_NAME</p>
             <p class="h2 text-muted mb-4" id="announcementPrayerTime">PRAYER_TIME</p>
             <p class="h3 text-secondary" id="announcementZoneName">ZONE_NAME</p>
         </div>
 
-        <!-- Iqama Countdown Display (NEW Layout) -->
-        <div id="iqamaCountdownDisplay" class="display-mode-content">
+        <!-- Iqama Countdown Display -->
+        <div id="iqamaCountdownDisplay" class="display-mode-content" style="z-index: 90;">
             <p class="h2 mb-2 fw-bold" id="iqamaPrayerName">PRAYER_NAME</p>
             <p class="h3 text-muted mb-2" id="iqamaPrayerTime">PRAYER_TIME</p>
             <p class="h4 text-secondary mb-4" id="iqamaZoneName">ZONE_NAME</p>
@@ -84,12 +84,17 @@
             </div>
         </div>
 
-        <!-- Post-Iqama Message Display (NEW) -->
-        <div id="postIqamaMessageDisplay" class="display-mode-content">
+        <!-- Post-Iqama Message Display -->
+        <div id="postIqamaMessageDisplay" class="display-mode-content" style="z-index: 95;">
             <p class="display-4 fw-bold text-primary mb-3">“Straighten your rows. for the straightening of a row is a part of the perfection of prayer.”</p>
             <p class="h5 text-muted mb-4">- Sahih Muslim (433)</p>
             <p class="h1 text-secondary">Please silent your phone and devices.</p>
         </div>
+
+        <!-- Custom Displays -->
+        <div id="customDisplay" class="display-mode-content" style="z-index: 90;">
+        </div>
+
 
     </div>
 
@@ -123,8 +128,8 @@
                 </table>
             </div>
         </div>
-        <!-- Mosque Name Display (NEW) -->
-        <p class="h5 text-center text-muted marquee-text" id="mosqueNameDisplay"></p>
+        <!-- Mosque Name Display -->
+        <p class="h5 text-center text-muted" id="mosqueNameDisplay"></p>
     </div>
 
     <!-- Settings Offcanvas -->
@@ -136,11 +141,12 @@
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
-            <!-- New: Logo and App Name -->
+            <!-- Logo and App Name -->
             <div class="text-center mb-4">
                 <a href="https://github.com/hanisirfan/light-prayer-times" target="_blank" rel="noopener noreferrer" class="d-inline-block text-decoration-none">
                     <img src="images/logo/logo-192x192.png" alt="Light Prayer Times Logo" class="img-fluid mb-2" style="max-width: 80px;">
                     <h2 class="h5 text-primary fw-bold mb-0">Light Prayer Times</h2>
+                    <h2 class="h6 mb-0">v.0.3.0</h2>
                 </a>
             </div>
             <hr class="my-4">
@@ -158,7 +164,7 @@
                     Sync Now
                 </button>
             </div>
-            <!-- New: View Monthly Times button -->
+            <!-- View Monthly Times button -->
             <div class="d-flex justify-content-center mb-4">
                 <a href="monthly-view.html" class="btn btn-outline-secondary w-100">
                     View Monthly Times
@@ -211,7 +217,7 @@
 
             <hr class="my-4">
 
-            <!-- Next Scheduled Auto Sync Display (NEW) -->
+            <!-- Next Scheduled Auto Sync Display -->
             <p class="h6 text-muted mb-3" id="nextAutoSyncDisplay">Next auto sync: N/A</p>
 
             <button class="btn btn-outline-secondary w-100 mb-3" data-bs-toggle="modal" data-bs-target="#syncHistoryModal">
@@ -224,7 +230,7 @@
                 <label class="form-check-label" for="timeFormatSwitch">Use 24-hour format</label>
             </div>
 
-            <!-- New: Mosque Name Input -->
+            <!-- Mosque Name Input -->
             <h6 class="text-muted mb-3">Mosque Settings (Optional)</h6>
             <div class="mb-4">
                 <label for="mosqueNameInput" class="form-label">Mosque Name:</label>
@@ -265,7 +271,17 @@
 
             <hr class="my-4">
 
-            <!-- Debug Settings Section (NEW) -->
+            <!-- Data Management (Import/Export) -->
+            <h6 class="text-muted mb-3">Data Management</h6>
+            <div class="d-grid gap-2 mb-4">
+                <button class="btn btn-outline-info" id="exportDataBtn">Export All Data</button>
+                <button class="btn btn-outline-info" id="importDataBtn">Import Data</button>
+                <input type="file" id="importFileInput" accept=".json" class="d-none">
+            </div>
+
+            <hr class="my-4">
+
+            <!-- Debug Settings Section -->
             <h6 class="text-muted mb-3">Debug Settings</h6>
             <div class="form-check form-switch mb-3">
                 <input class="form-check-input" type="checkbox" id="debugModeSwitch">
@@ -377,7 +393,7 @@
         </div>
     </div>
 
-    <!-- Sync History Modal (NEW) -->
+    <!-- Sync History Modal -->
     <div class="modal fade" id="syncHistoryModal" tabindex="-1" aria-labelledby="syncHistoryModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content rounded-4 shadow">
