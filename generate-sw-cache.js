@@ -17,6 +17,7 @@ const STATIC_FILES_TO_PRECACHE = [
     './index.html',
     './manifest.json',
     './monthly-view.html',
+    './monthly-view',
     // Add any other top-level static files not in a folder
 ];
 
