@@ -16,8 +16,8 @@ const STATIC_FILES_TO_PRECACHE = [
     './', // Caches the root (index.html)
     './index.html',
     './manifest.json',
-    './monthly-view.html',
     './monthly-view',
+    './monthly-view/index.html',
     // Add any other top-level static files not in a folder
 ];
 

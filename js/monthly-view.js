@@ -406,7 +406,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
             // After message, redirect:
             setTimeout(() => {
-                window.location.href = 'index.html';
+                window.location.href = '/';
             }, 3000); // Redirect after 3 seconds
             
             // To prevent the dropdown from permanently showing "Sync New Zone",
