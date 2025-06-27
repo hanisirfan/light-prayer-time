@@ -1,5 +1,13 @@
 {
+  "name": "my-pwa",
+  "version": "1.0.0",
+  "scripts": {
+    "generate-sw": "node generate-sw-cache.js",
+    "start": "npm run generate-sw && live-server",
+    "build": "npm run generate-sw && echo 'PWA build complete!'"
+  },
   "dependencies": {
-    "bootstrap-icons": "^1.13.1"
+    "bootstrap-icons": "^1.13.1",
+    "live-server": "^1.2.0"
   }
 }

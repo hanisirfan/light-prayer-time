@@ -63,5 +63,9 @@ Firefox on Windows requires an extension to install PWAs.
 4. A prompt will appear asking if you want to add it to your home screen. Tap Add.
 5. The app icon will be added to your home screen and app drawer.
 
+## Note
+
+Use `npm run generate-sw` to generate paths to pre-cache files for service worker.
+
 ## To Do:
 - Custom displays/presentation
