@@ -14,6 +14,7 @@ const urlsToCache = [
     './js/bootstrap.bundle.min.js',
     './css/bootstrap.min.css.map',
     './js/bootstrap.bundle.min.js.map',
+    './node_modules/bootstrap-icons/font/bootstrap-icons.min.css',
     // Updated to PNG icons and new path
     './images/logo/logo-32x32.png',
     './images/logo/logo-192x192.png',
