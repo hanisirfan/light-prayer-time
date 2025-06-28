@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "xyz.hanisirfan.light_prayer_times.twa",
+        "sha256_cert_fingerprints": ["6F:90:66:07:44:D0:D9:AE:41:F7:63:DC:5C:DD:BC:F6:B2:6C:EB:DA:EF:9F:A6:AF:02:E8:A4:33:48:90:1C:2E"]
+      }
+    }]
