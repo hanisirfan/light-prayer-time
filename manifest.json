@@ -2,7 +2,7 @@
     "name": "Light Prayer Times",
     "short_name": "LightPrayer",
     "description": "Your personal prayer times companion, featuring JAKIM data, Iqama times, and PWA support.",
-    "start_url": "./index.html",
+    "start_url": "/",
     "display": "standalone",
     "background_color": "#212529",
     "theme_color": "#0d6efd",
