@@ -1,11 +1,12 @@
 {
     "name": "Light Prayer Times",
     "short_name": "LightPrayer",
-    "description": "Your personal prayer times companion, featuring JAKIM data, Iqama times, and PWA support.",
+    "description": "Your personal lightweight prayer times companion, featuring JAKIM data, Iqama times, and PWA support.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#212529",
     "theme_color": "#0d6efd",
+    "orientation": "any",
     "icons": [
         {
             "src": "images/logo/logo-192x192.png",
@@ -16,6 +17,24 @@
             "src": "images/logo/logo-512x512.png",
             "sizes": "512x512",
             "type": "image/png"
+        }
+    ],
+    "categories": [
+        "education",
+        "productivity"
+    ],
+    "screenshots": [
+        {
+        "src": "images/screenshots/zdesktop-tv/desktop-tv1.png",
+        "type": "image/png"
+        },
+        {
+        "src": "images/screenshots/zdesktop-tv/desktop-tv2.png",
+        "type": "image/png"
+        },
+        {
+        "src": "images/screenshots/zdesktop-tv/desktop-tv3.png",
+        "type": "image/png"
         }
     ]
 }
