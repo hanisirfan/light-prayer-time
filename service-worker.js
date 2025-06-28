@@ -2,10 +2,9 @@
 
 // This will be replaced by the build script with the actual array of URLs
 const urlsToCache = [
+  "./manifest.json",
   "./",
   "./index.html",
-  "./manifest.json",
-  "./monthly-view",
   "./monthly-view/index.html",
   "./css/bootstrap-icons/bootstrap-icons.svg",
   "./css/bootstrap-icons/font/bootstrap-icons.css",
@@ -2128,7 +2127,7 @@ const urlsToCache = [
 ];
 
 // This will be replaced by the build script for cache busting
-const CACHE_NAME = 'prayer-times-cache-1751035914686'; // Placeholder for the script to replace
+const CACHE_NAME = 'prayer-times-cache-1751069566940'; // Placeholder for the script to replace
 
 self.addEventListener('install', (event) => {
     console.log('[Service Worker] Installing...');
