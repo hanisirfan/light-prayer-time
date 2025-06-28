@@ -1,5 +1,6 @@
 {
     "name": "Light Prayer Times",
+    "id": "0.4.2",
     "short_name": "LightPrayer",
     "description": "Your personal lightweight prayer times companion, featuring JAKIM data, Iqama times, and PWA support.",
     "start_url": "/",
@@ -7,6 +8,7 @@
     "background_color": "#212529",
     "theme_color": "#0d6efd",
     "orientation": "any",
+    "lang": "en",
     "icons": [
         {
             "src": "images/logo/logo-192x192.png",
@@ -19,22 +21,42 @@
             "type": "image/png"
         }
     ],
-    "categories": [
+    "launch_handler": {
+        "client_mode": ["focus-existing", "auto"]
+    },
+    "screenshots": [
+        {
+            "src": "images/screenshots/zdesktop-tv/desktop-tv1.png",
+            "sizes": "1900x910",
+            "type": "image/png"
+        },
+        {
+            "src": "images/screenshots/zdesktop-tv/desktop-tv2.png",
+            "sizes": "1900x910",
+            "type": "image/png"
+        },
+        {
+            "src": "images/screenshots/zdesktop-tv/desktop-tv3.png",
+            "sizes": "1900x910",
+            "type": "image/png"
+        }
+    ],
+        "categories": [
         "education",
         "productivity"
     ],
-    "screenshots": [
+    "related_applications": [
         {
-        "src": "images/screenshots/zdesktop-tv/desktop-tv1.png",
-        "type": "image/png"
+            "platform": "play",
+            "url": "https://play.google.com/store/apps/details?id=solat.time.alarm"
         },
         {
-        "src": "images/screenshots/zdesktop-tv/desktop-tv2.png",
-        "type": "image/png"
+            "platform": "play",
+            "url": "https://play.google.com/store/apps/details?id=com.reworewo.prayertimes"
         },
         {
-        "src": "images/screenshots/zdesktop-tv/desktop-tv3.png",
-        "type": "image/png"
+            "platform": "play",
+            "url": "https://play.google.com/store/apps/details?id=com.murad.waktusolat"
         }
     ]
 }
